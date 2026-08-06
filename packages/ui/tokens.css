@@ -1,0 +1,270 @@
+/*
+ * TimeOff design tokens
+ * ---------------------------------------------------------------------------
+ * Brand scales are theme-agnostic. Semantic role tokens reference them and
+ * flip in `.dark`. Every color pairing here is chosen to meet WCAG AA on
+ * the surfaces it renders against.
+ */
+
+/* ===========================================================================
+ * Brand scales (static, theme-agnostic)
+ * ========================================================================= */
+
+:root {
+  /* Primary — "Lagoon" teal. Calm, restful, human. Reads as trustworthy
+     without the generic SaaS indigo. Hue drifts greenward as it darkens. */
+  --lagoon-50: #f0f9f7;
+  --lagoon-100: #daf0eb;
+  --lagoon-200: #b5e1d8;
+  --lagoon-300: #84cbbf;
+  --lagoon-400: #4dafa1;
+  --lagoon-500: #2e9486;
+  --lagoon-600: #1f776c;
+  --lagoon-700: #1b6058;
+  --lagoon-800: #184e48;
+  --lagoon-900: #153f3b;
+  --lagoon-950: #0a2422;
+
+  /* Neutral — warm "sand" gray. Gives the calm-while-warm Notion feeling;
+     pairs with lagoon without going green-washed. */
+  --sand-50: #fafaf9;
+  --sand-100: #f5f4f2;
+  --sand-200: #e7e5e1;
+  --sand-300: #d6d3cc;
+  --sand-400: #a8a59d;
+  --sand-500: #79766e;
+  --sand-600: #5e5b54;
+  --sand-700: #4a4741;
+  --sand-800: #33312c;
+  --sand-900: #21201c;
+  --sand-950: #12110e;
+
+  /* Semantic raw scales */
+  --success-50: #ecfdf5;
+  --success-100: #d1fae5;
+  --success-200: #a7f3d0;
+  --success-300: #6ee7b7;
+  --success-400: #34d399;
+  --success-500: #0f9d6e;
+  --success-600: #047857;
+  --success-700: #065f46;
+  --success-800: #064e3b;
+  --success-900: #064e3b;
+
+  --warning-50: #fffbeb;
+  --warning-100: #fef3c7;
+  --warning-200: #fde68a;
+  --warning-300: #fcd34d;
+  --warning-400: #fbbf24;
+  --warning-500: #f59e0b;
+  --warning-600: #b45309;
+  --warning-700: #92400e;
+  --warning-800: #78350f;
+  --warning-900: #451a03;
+
+  --danger-50: #fef3f2;
+  --danger-100: #fee4e2;
+  --danger-200: #fecdca;
+  --danger-300: #fda29b;
+  --danger-400: #f97066;
+  --danger-500: #d94b3d;
+  --danger-600: #c03a2d;
+  --danger-700: #a0271c;
+  --danger-800: #82211b;
+  --danger-900: #61110a;
+
+  --info-50: #eff6ff;
+  --info-100: #dbeafe;
+  --info-200: #bfdbfe;
+  --info-300: #93c5fd;
+  --info-400: #60a5fa;
+  --info-500: #3b82f6;
+  --info-600: #2563eb;
+  --info-700: #1d4ed8;
+  --info-800: #1e40af;
+  --info-900: #1e3a8a;
+
+  /* Leave-type palette — hue-distant categorical colors for calendars,
+     badges, and per-type progress. Distinctness over decoration. */
+  --leave-vacation: #2e9486; /* lagoon 500 */
+  --leave-sick: #d94b3d; /* danger 500 */
+  --leave-parental: #7c6ac4;
+  --leave-bereavement: #64748b;
+  --leave-unpaid: #a8a59d;
+  --leave-remote: #3b82f6;
+  --leave-custom: #d97706;
+  --leave-special: #be5ba8;
+}
+
+/* ===========================================================================
+ * Semantic roles — Light theme
+ * ========================================================================= */
+
+:root {
+  --background: var(--sand-50);
+  --foreground: var(--sand-900);
+
+  --card: #ffffff;
+  --card-foreground: var(--sand-900);
+  --card-border: var(--sand-200);
+
+  --popover: #ffffff;
+  --popover-foreground: var(--sand-900);
+
+  --primary: var(--lagoon-600);
+  --primary-foreground: #ffffff;
+  --primary-hover: var(--lagoon-700);
+  --primary-subtle: var(--lagoon-50);
+  --primary-subtle-foreground: var(--lagoon-800);
+  --primary-border: var(--lagoon-200);
+
+  --secondary: var(--sand-100);
+  --secondary-foreground: var(--sand-800);
+  --secondary-hover: var(--sand-200);
+
+  --muted: var(--sand-100);
+  --muted-foreground: var(--sand-500);
+
+  --accent: var(--sand-100);
+  --accent-foreground: var(--sand-900);
+  --accent-hover: var(--sand-200);
+
+  --destructive: var(--danger-500);
+  --destructive-foreground: #ffffff;
+  --destructive-subtle: var(--danger-50);
+  --destructive-subtle-foreground: var(--danger-700);
+  --destructive-border: var(--danger-200);
+
+  --success: var(--success-600);
+  --success-foreground: #ffffff;
+  --success-subtle: var(--success-50);
+  --success-subtle-foreground: var(--success-700);
+  --success-border: var(--success-200);
+
+  --warning: var(--warning-600);
+  --warning-foreground: #ffffff;
+  --warning-subtle: var(--warning-50);
+  --warning-subtle-foreground: var(--warning-700);
+  --warning-border: var(--warning-200);
+
+  --info: var(--info-600);
+  --info-foreground: #ffffff;
+  --info-subtle: var(--info-50);
+  --info-subtle-foreground: var(--info-800);
+  --info-border: var(--info-200);
+
+  --border: var(--sand-200);
+  --input: var(--sand-300);
+  --ring: color-mix(in srgb, var(--lagoon-500) 55%, transparent);
+
+  /* Elevation — teal-tinted, layered. Reserved for floating surfaces. */
+  --shadow-sm:
+    0 1px 2px 0 rgb(10 36 34 / 0.06), 0 1px 3px 0 rgb(10 36 34 / 0.08);
+  --shadow-md:
+    0 4px 8px -2px rgb(10 36 34 / 0.08), 0 8px 20px -6px rgb(10 36 34 / 0.12);
+  --shadow-lg:
+    0 12px 24px -6px rgb(10 36 34 / 0.12), 0 24px 48px -12px rgb(10 36 34 / 0.18);
+  --shadow-xl:
+    0 20px 40px -8px rgb(10 36 34 / 0.16), 0 40px 80px -16px rgb(10 36 34 / 0.22);
+  --shadow-glow: 0 0 0 1px color-mix(in srgb, var(--lagoon-500) 25%, transparent);
+
+  --radius-sm: 6px;
+  --radius-md: 10px;
+  --radius-lg: 16px;
+  --radius-xl: 22px;
+  --radius-full: 9999px;
+
+  /* Font stacks — --font-inter/--font-fraunces are injected by next/font. */
+  --font-sans: var(--font-inter), "Inter", ui-sans-serif, system-ui,
+    -apple-system, "Segoe UI", sans-serif;
+  --font-display: var(--font-fraunces), "Fraunces", var(--font-sans);
+
+  /* Motion */
+  --ease-standard: cubic-bezier(0.4, 0, 0.2, 1);
+  --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+  --duration-fast: 150ms;
+  --duration-base: 250ms;
+  --duration-slow: 400ms;
+}
+
+/* ===========================================================================
+ * Semantic roles — Dark theme
+ * ========================================================================= */
+
+.dark {
+  --background: var(--sand-950);
+  --foreground: var(--sand-100);
+
+  --card: var(--sand-900);
+  --card-foreground: var(--sand-100);
+  --card-border: var(--sand-800);
+
+  --popover: var(--sand-900);
+  --popover-foreground: var(--sand-100);
+
+  --primary: var(--lagoon-400);
+  --primary-foreground: var(--lagoon-950);
+  --primary-hover: var(--lagoon-300);
+  --primary-subtle: color-mix(in srgb, var(--lagoon-400) 12%, transparent);
+  --primary-subtle-foreground: var(--lagoon-200);
+  --primary-border: color-mix(in srgb, var(--lagoon-400) 30%, transparent);
+
+  --secondary: var(--sand-800);
+  --secondary-foreground: var(--sand-200);
+  --secondary-hover: var(--sand-700);
+
+  --muted: var(--sand-800);
+  --muted-foreground: var(--sand-400);
+
+  --accent: var(--sand-800);
+  --accent-foreground: var(--sand-100);
+  --accent-hover: var(--sand-700);
+
+  --destructive: var(--danger-400);
+  --destructive-foreground: var(--danger-950, #3a0906);
+  --destructive-subtle: color-mix(in srgb, var(--danger-400) 14%, transparent);
+  --destructive-subtle-foreground: var(--danger-300);
+  --destructive-border: color-mix(in srgb, var(--danger-400) 30%, transparent);
+
+  --success: var(--success-400);
+  --success-foreground: var(--success-950, #022c22);
+  --success-subtle: color-mix(in srgb, var(--success-400) 14%, transparent);
+  --success-subtle-foreground: var(--success-300);
+  --success-border: color-mix(in srgb, var(--success-400) 30%, transparent);
+
+  --warning: var(--warning-400);
+  --warning-foreground: var(--warning-950, #3b2302);
+  --warning-subtle: color-mix(in srgb, var(--warning-400) 14%, transparent);
+  --warning-subtle-foreground: var(--warning-300);
+  --warning-border: color-mix(in srgb, var(--warning-400) 30%, transparent);
+
+  --info: var(--info-400);
+  --info-foreground: var(--info-950, #0c1e4e);
+  --info-subtle: color-mix(in srgb, var(--info-400) 14%, transparent);
+  --info-subtle-foreground: var(--info-300);
+  --info-border: color-mix(in srgb, var(--info-400) 30%, transparent);
+
+  --border: var(--sand-800);
+  --input: var(--sand-700);
+  --ring: color-mix(in srgb, var(--lagoon-400) 55%, transparent);
+
+  --shadow-sm:
+    0 1px 2px 0 rgb(0 0 0 / 0.4), 0 1px 3px 0 rgb(0 0 0 / 0.5);
+  --shadow-md:
+    0 4px 8px -2px rgb(0 0 0 / 0.4), 0 8px 20px -6px rgb(0 0 0 / 0.5);
+  --shadow-lg:
+    0 12px 24px -6px rgb(0 0 0 / 0.45), 0 24px 48px -12px rgb(0 0 0 / 0.6);
+  --shadow-xl:
+    0 20px 40px -8px rgb(0 0 0 / 0.5), 0 40px 80px -16px rgb(0 0 0 / 0.65);
+  --shadow-glow: 0 0 0 1px color-mix(in srgb, var(--lagoon-400) 25%, transparent);
+
+  /* High-visibility leave colors for dark surfaces */
+  --leave-vacation: #84cbbf;
+  --leave-sick: #f97066;
+  --leave-parental: #a99ae0;
+  --leave-bereavement: #94a3b8;
+  --leave-unpaid: #79766e;
+  --leave-remote: #60a5fa;
+  --leave-custom: #f59e0b;
+  --leave-special: #e498d2;
+}

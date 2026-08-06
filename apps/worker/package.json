@@ -1,0 +1,26 @@
+{
+  "name": "@timeoff/worker",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "tsx watch src/bootstrap.ts",
+    "start": "tsx src/bootstrap.ts",
+    "typecheck": "tsc --noEmit",
+    "once": "tsx src/run-once.ts"
+  },
+  "dependencies": {
+    "@timeoff/db": "workspace:*",
+    "@timeoff/domain": "workspace:*",
+    "@timeoff/email": "workspace:*",
+    "bullmq": "^6.0.8",
+    "dotenv": "^17.4.2",
+    "ioredis": "^6.0.0"
+  },
+  "devDependencies": {
+    "@timeoff/config": "workspace:*",
+    "@types/node": "^22.10.0",
+    "tsx": "^4.19.0",
+    "typescript": "^5.7.0"
+  }
+}

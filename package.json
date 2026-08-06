@@ -1,0 +1,25 @@
+{
+  "name": "timeoff",
+  "version": "0.1.0",
+  "private": true,
+  "packageManager": "pnpm@11.20.0",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "build": "turbo run build",
+    "dev": "turbo run dev",
+    "lint": "turbo run lint",
+    "typecheck": "turbo run typecheck",
+    "test": "turbo run test",
+    "db:generate": "pnpm --filter @timeoff/db generate",
+    "db:migrate": "pnpm --filter @timeoff/db migrate",
+    "db:seed": "pnpm --filter @timeoff/db seed",
+    "smoke:access": "pnpm --filter web exec tsx scripts/access-smoke.ts",
+    "dev:worker": "pnpm --filter @timeoff/worker dev",
+    "worker:once": "pnpm --filter @timeoff/worker once"
+  },
+  "devDependencies": {
+    "turbo": "^2.5.0"
+  }
+}

@@ -1,0 +1,20 @@
+{
+  "name": "@timeoff/email",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "resend": "^6.18.1"
+  },
+  "devDependencies": {
+    "@timeoff/config": "workspace:*",
+    "@types/node": "^22.10.0",
+    "typescript": "^5.7.0"
+  }
+}

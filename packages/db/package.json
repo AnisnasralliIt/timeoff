@@ -1,0 +1,33 @@
+{
+  "name": "@timeoff/db",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./seed": "./src/seed.ts"
+  },
+  "scripts": {
+    "generate": "prisma generate",
+    "migrate": "prisma migrate dev",
+    "deploy": "prisma migrate deploy",
+    "seed": "tsx src/seed.ts",
+    "studio": "prisma studio",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@prisma/client": "^6.5.0",
+    "@timeoff/domain": "workspace:*",
+    "bcryptjs": "^3.0.3"
+  },
+  "devDependencies": {
+    "@timeoff/config": "workspace:*",
+    "@types/node": "^22.10.0",
+    "prisma": "^6.5.0",
+    "tsx": "^4.19.0",
+    "typescript": "^5.7.0"
+  },
+  "prisma": {
+    "seed": "tsx src/seed.ts"
+  }
+}

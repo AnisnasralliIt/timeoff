@@ -1,0 +1,134 @@
+/*
+ * Tailwind v4 theme bridge.
+ * Maps the semantic role tokens (which flip in `.dark`) into Tailwind
+ * utilities via `@theme inline`. Brand scales become full color utilities
+ * (bg-lagoon-500, text-sand-700, ...).
+ */
+
+@custom-variant dark (&:is(.dark *));
+
+@theme inline {
+  /* Surfaces */
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+
+  /* Primary */
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-primary-hover: var(--primary-hover);
+  --color-primary-subtle: var(--primary-subtle);
+  --color-primary-subtle-foreground: var(--primary-subtle-foreground);
+
+  /* Neutrals / feedback */
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-secondary-hover: var(--secondary-hover);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-accent-hover: var(--accent-hover);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-destructive-subtle: var(--destructive-subtle);
+  --color-destructive-subtle-foreground: var(--destructive-subtle-foreground);
+  --color-success: var(--success);
+  --color-success-foreground: var(--success-foreground);
+  --color-success-subtle: var(--success-subtle);
+  --color-success-subtle-foreground: var(--success-subtle-foreground);
+  --color-warning: var(--warning);
+  --color-warning-foreground: var(--warning-foreground);
+  --color-warning-subtle: var(--warning-subtle);
+  --color-warning-subtle-foreground: var(--warning-subtle-foreground);
+  --color-info: var(--info);
+  --color-info-foreground: var(--info-foreground);
+  --color-info-subtle: var(--info-subtle);
+  --color-info-subtle-foreground: var(--info-subtle-foreground);
+
+  /* Lines */
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+
+  /* Brand scales as utilities */
+  --color-lagoon-50: var(--lagoon-50);
+  --color-lagoon-100: var(--lagoon-100);
+  --color-lagoon-200: var(--lagoon-200);
+  --color-lagoon-300: var(--lagoon-300);
+  --color-lagoon-400: var(--lagoon-400);
+  --color-lagoon-500: var(--lagoon-500);
+  --color-lagoon-600: var(--lagoon-600);
+  --color-lagoon-700: var(--lagoon-700);
+  --color-lagoon-800: var(--lagoon-800);
+  --color-lagoon-900: var(--lagoon-900);
+  --color-lagoon-950: var(--lagoon-950);
+
+  --color-sand-50: var(--sand-50);
+  --color-sand-100: var(--sand-100);
+  --color-sand-200: var(--sand-200);
+  --color-sand-300: var(--sand-300);
+  --color-sand-400: var(--sand-400);
+  --color-sand-500: var(--sand-500);
+  --color-sand-600: var(--sand-600);
+  --color-sand-700: var(--sand-700);
+  --color-sand-800: var(--sand-800);
+  --color-sand-900: var(--sand-900);
+  --color-sand-950: var(--sand-950);
+
+  /* Leave-type palette */
+  --color-leave-vacation: var(--leave-vacation);
+  --color-leave-sick: var(--leave-sick);
+  --color-leave-parental: var(--leave-parental);
+  --color-leave-bereavement: var(--leave-bereavement);
+  --color-leave-unpaid: var(--leave-unpaid);
+  --color-leave-remote: var(--leave-remote);
+  --color-leave-custom: var(--leave-custom);
+  --color-leave-special: var(--leave-special);
+
+  /* Typography */
+  --font-sans: var(--font-sans);
+  --font-display: var(--font-display);
+
+  /* Radius */
+  --radius-sm: var(--radius-sm);
+  --radius-md: var(--radius-md);
+  --radius-lg: var(--radius-lg);
+  --radius-xl: var(--radius-xl);
+  --radius-full: var(--radius-full);
+
+  /* Elevation */
+  --shadow-sm: var(--shadow-sm);
+  --shadow-md: var(--shadow-md);
+  --shadow-lg: var(--shadow-lg);
+  --shadow-xl: var(--shadow-xl);
+  --shadow-glow: var(--shadow-glow);
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+
+  html {
+    @apply antialiased;
+    color-scheme: light;
+  }
+
+  html.dark {
+    color-scheme: dark;
+  }
+
+  body {
+    @apply bg-background text-foreground;
+    font-feature-settings: "cv02", "cv03", "cv04", "cv11";
+  }
+
+  /* Tabular figures for anything numeric (balances, dates, stats) */
+  .tabular-nums-inherit {
+    font-variant-numeric: tabular-nums;
+  }
+}

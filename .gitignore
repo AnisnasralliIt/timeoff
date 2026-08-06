@@ -1,0 +1,31 @@
+# dependencies
+node_modules/
+.pnpm-store/
+
+# next.js
+apps/web/.next/
+apps/web/out/
+apps/web/next-env.d.ts
+
+# builds
+dist/
+build/
+
+# env
+.env
+.env.local
+.env.*.local
+
+# turbo
+.turbo/
+
+# testing
+coverage/
+
+# misc
+.DS_Store
+*.pem
+*.log
+
+# prisma
+packages/db/migrations/dev.db

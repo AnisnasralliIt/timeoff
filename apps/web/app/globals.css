@@ -1,0 +1,31 @@
+@import "tailwindcss";
+@plugin "tailwindcss-animate";
+@source "../../../packages/ui/components";
+@import "@timeoff/ui/tokens.css";
+@import "@timeoff/ui/theme.css";
+
+/* App-level additions below the design system */
+
+::selection {
+  background-color: color-mix(in srgb, var(--lagoon-500) 25%, transparent);
+}
+
+/* Slim, on-brand scrollbars */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--sand-300) transparent;
+}
+.dark * {
+  scrollbar-color: var(--sand-700) transparent;
+}
+
+/* Respect reduced-motion preference at the app level */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}

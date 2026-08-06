@@ -1,0 +1,475 @@
+// TimeOff data model.
+// Conventions:
+//  - Date-only values (leave dates, period bounds) are stored as ISO `YYYY-MM-DD`
+//    strings to avoid timezone drift. Timestamps are DateTime.
+//  - Money/days are Float (days may be 0.5 for half-days).
+//  - Enums are used for closed sets; strings for open sets.
+// See DECISIONS.md for the rationale behind every structural choice.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  EMPLOYEE
+  MANAGER
+  ADMIN
+  HR
+  SUPER_ADMIN
+  EXECUTIVE
+}
+
+enum EmploymentType {
+  FULL_TIME
+  PART_TIME
+  CONTRACTOR
+}
+
+enum UserStatus {
+  ACTIVE
+  INACTIVE
+  OFFBOARDED
+}
+
+enum LeaveUnit {
+  DAYS
+  HOURS
+}
+
+enum LeaveRequestStatus {
+  DRAFT
+  PENDING
+  APPROVED
+  REJECTED
+  CANCELLED
+}
+
+enum DayPart {
+  FULL
+  FIRST_HALF
+  SECOND_HALF
+}
+
+enum ApprovalKind {
+  MANAGER
+  MANAGERS_MANAGER
+  HR
+  SPECIFIC_USER
+}
+
+enum IntegrationKind {
+  ICAL
+  GOOGLE_CALENDAR
+  OUTLOOK
+  SLACK
+  TEAMS
+}
+
+enum EmailMessageStatus {
+  QUEUED
+  SENDING
+  SENT
+  FAILED
+}
+
+model Company {
+  id                    String        @id @default(cuid())
+  name                  String
+  domain                String?       @unique
+  timezone              String        @default("Europe/Berlin")
+  fiscalYearStartMonth  Int           @default(1) // leave year starts on this month, day 1
+  locale                String        @default("en")
+  countryCode           String        @default("DE") // legal home country
+  currency              String        @default("EUR")
+  settings              Json? // branding, blackout periods, announcements
+  createdAt             DateTime      @default(now())
+  updatedAt             DateTime      @updatedAt
+
+  departments   Department[]
+  users         User[]
+  leaveTypes    LeaveType[]
+  leavePolicies LeavePolicy[]
+  holidays      Holiday[]
+  approvalRules ApprovalRule[]
+  auditLogs     AuditLog[]
+  integrations  Integration[]
+  attachments   Attachment[]
+  emailMessages EmailMessage[]
+
+  @@index([domain])
+}
+
+model Department {
+  id        String   @id @default(cuid())
+  companyId String
+  name      String
+  code      String? // e.g. "ENG", "OPS"
+  parentId  String?
+  sortOrder Int      @default(0)
+  createdAt DateTime @default(now())
+
+  company  Company      @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  parent   Department?  @relation("DeptHierarchy", fields: [parentId], references: [id])
+  children Department[] @relation("DeptHierarchy")
+  users    User[]
+  policies LeavePolicy[]
+  approvalRules ApprovalRule[]
+
+  @@unique([companyId, name])
+  @@index([parentId])
+}
+
+model User {
+  id                    String         @id @default(cuid())
+  companyId             String
+  email                 String
+  name                  String
+  googleId              String?        @unique
+  passwordHash          String?
+  role                  Role           @default(EMPLOYEE)
+  employmentType        EmploymentType @default(FULL_TIME)
+  status                UserStatus     @default(ACTIVE)
+  employmentStartDate   String // ISO YYYY-MM-DD
+  managerId             String?
+  departmentId          String
+  countryCode           String         @default("DE") // drives holiday calendar + statutory rules
+  timezone              String         @default("Europe/Berlin")
+  title                 String?
+  avatarUrl             String?
+  onboardedAt           DateTime?
+  createdAt             DateTime       @default(now())
+  updatedAt             DateTime       @updatedAt
+
+  company   Company       @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  manager   User?         @relation("ManagerReports", fields: [managerId], references: [id])
+  reports   User[]        @relation("ManagerReports")
+  department Department  @relation(fields: [departmentId], references: [id])
+  balances  LeaveBalance[]
+  requests  LeaveRequest[] @relation("RequestOwner")
+  approvals LeaveRequest[] @relation("RequestApprover")
+  cancellations LeaveRequest[] @relation("RequestCanceller")
+  notifications Notification[]
+  auditLogs AuditLog[]
+  approvalSteps ApprovalStep[] @relation("StepApprover")
+  delegationsOwned ApprovalDelegation[] @relation("DelegationOwner")
+  delegationsReceived ApprovalDelegation[] @relation("DelegationDelegate")
+  attachments Attachment[] @relation("AttachmentUploader")
+  emailMessages EmailMessage[]
+
+  @@unique([companyId, email])
+  @@index([email])
+  @@index([managerId])
+  @@index([departmentId])
+  @@index([role])
+}
+
+model LeaveType {
+  id                   String   @id @default(cuid())
+  companyId            String
+  name                 String
+  color                String   @default("#2e9486") // leave-palette token hex
+  unit                 LeaveUnit @default(DAYS)
+  requiresApproval     Boolean  @default(true)
+  requiresAttachment   Boolean  @default(false)
+  isPaid               Boolean  @default(true)
+  applicableCountries  String[] @default([]) // empty = all countries
+  isSystem             Boolean  @default(false) // seeded core types (vacation, sick...)
+  sortOrder            Int      @default(0)
+  createdAt            DateTime @default(now())
+
+  company  Company        @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  policies LeavePolicy[]
+  balances LeaveBalance[]
+  requests LeaveRequest[]
+
+  @@index([companyId])
+}
+
+model LeavePolicy {
+  id               String   @id @default(cuid())
+  companyId        String
+  name             String
+  leaveTypeId      String
+  departmentId     String? // null = company-wide
+  countryCode      String? // null = all countries
+  // Statutory model (v1): a fixed annual allotment.
+  annualAllotment  Float    @default(0)
+  // Accrual model (future, schema-ready): rate per full-time day in units.
+  accrualRate      Float?
+  accrualBased     Boolean  @default(false)
+  maxBalance       Float?
+  carryOverDays    Float    @default(0)
+  carryOverExpiresOn String? // "MM-DD" deadline for using carried-over days
+  negativeAllowed  Boolean  @default(false)
+  maxNegative      Float    @default(0)
+  probationDays    Int      @default(0)
+  requiresApproval Boolean? // override leave-type default
+  requiresAttachment Boolean? // override
+  createdAt        DateTime @default(now())
+  company  Company      @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  leaveType  LeaveType    @relation(fields: [leaveTypeId], references: [id], onDelete: Cascade)
+  department Department?  @relation(fields: [departmentId], references: [id])
+
+  @@index([companyId, leaveTypeId])
+}
+model LeaveBalance {
+  id          String @id @default(cuid())
+  companyId   String
+  userId      String
+  leaveTypeId String
+  periodStart String // ISO YYYY-MM-DD
+  periodEnd   String // ISO YYYY-MM-DD
+  // accrued = statutory allotment (or sum of accrual entries); carriedOver and
+  // adjustment are HR-controlled. `used` = taken, `pending` = approved-future
+  // or awaiting-approval. available = accrued + carriedOver + adjustment - used - pending.
+  accrued     Float  @default(0)
+  carriedOver Float  @default(0)
+  adjustment  Float  @default(0)
+  used        Float  @default(0)
+  pending     Float  @default(0)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  leaveType LeaveType @relation(fields: [leaveTypeId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, leaveTypeId, periodStart, periodEnd])
+  @@index([companyId])
+}
+
+model LeaveRequest {
+  id            String             @id @default(cuid())
+  companyId     String
+  userId        String
+  leaveTypeId   String
+  startDate     String // ISO YYYY-MM-DD
+  endDate       String // ISO YYYY-MM-DD
+  startDayPart  DayPart            @default(FULL)
+  endDayPart    DayPart            @default(FULL)
+  totalDays     Float
+  unit          LeaveUnit          @default(DAYS)
+  reason        String?
+  status        LeaveRequestStatus @default(PENDING)
+  approvedById  String?
+  approvedAt    DateTime?
+  rejectionReason String?
+  cancelledById String?
+  cancelReason  String?
+  // Delegation: delegateToId = who approves while the manager is out;
+  // effectiveApproverId = the person who actually decided.
+  delegateToId  String?
+  effectiveApproverId String?
+  // currentApprovalLevel = level of the last completed approval step (0 = none).
+  currentApprovalLevel Int @default(0)
+  createdAt     DateTime           @default(now())
+  updatedAt     DateTime           @updatedAt
+
+  user         User            @relation("RequestOwner", fields: [userId], references: [id], onDelete: Cascade)
+  leaveType    LeaveType       @relation(fields: [leaveTypeId], references: [id])
+  days         LeaveRequestDay[]
+  approvedBy   User?           @relation("RequestApprover", fields: [approvedById], references: [id])
+  cancelledBy  User?           @relation("RequestCanceller", fields: [cancelledById], references: [id])
+  approvalSteps ApprovalStep[]
+  attachments  Attachment[]
+
+  @@index([companyId, userId])
+  @@index([companyId, status])
+  @@index([startDate, endDate])
+}
+
+model LeaveRequestDay {
+  id             String  @id @default(cuid())
+  leaveRequestId String
+  date           String // ISO YYYY-MM-DD
+  dayPart        DayPart @default(FULL)
+
+  leaveRequest LeaveRequest @relation(fields: [leaveRequestId], references: [id], onDelete: Cascade)
+
+  @@index([date])
+  @@unique([leaveRequestId, date])
+}
+
+model Holiday {
+  id          String   @id @default(cuid())
+  companyId   String
+  countryCode String   @default("DE")
+  name        String
+  date        String // ISO YYYY-MM-DD; for recurring holidays this is the canonical instance
+  isRecurring Boolean  @default(false) // true = repeats every year on the same month-day
+  createdAt   DateTime @default(now())
+
+  company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  @@index([companyId, countryCode])
+}
+
+model ApprovalRule {
+  id              String       @id @default(cuid())
+  companyId       String
+  name            String
+  departmentId    String?
+  leaveTypeId     String?
+  level           Int          @default(1) // 1 = first approver
+  kind            ApprovalKind @default(MANAGER)
+  specificUserId  String?
+  delegateToUserId String?
+  active          Boolean      @default(true)
+  createdAt       DateTime     @default(now())
+
+  company    Company    @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  department Department? @relation(fields: [departmentId], references: [id])
+
+  @@index([companyId])
+}
+
+/** One decided step in a multi-level approval chain (level 1 → 2 → …). */
+model ApprovalStep {
+  id             String             @id @default(cuid())
+  leaveRequestId String
+  approverId     String
+  level          Int                @default(1)
+  action         LeaveRequestStatus // APPROVED or REJECTED
+  comment        String?
+  createdAt      DateTime           @default(now())
+
+  leaveRequest LeaveRequest @relation(fields: [leaveRequestId], references: [id], onDelete: Cascade)
+  approver     User         @relation("StepApprover", fields: [approverId], references: [id])
+
+  @@index([leaveRequestId])
+}
+
+/** Manager out-of-office: approvals for `userId` route to `delegateId` while active. */
+model ApprovalDelegation {
+  id         String   @id @default(cuid())
+  companyId  String
+  userId     String // the approver who is out
+  delegateId String // who approves instead
+  startsOn   String? // ISO YYYY-MM-DD
+  endsOn     String? // ISO YYYY-MM-DD
+  active     Boolean  @default(true)
+  createdAt  DateTime @default(now())
+
+  user     User @relation("DelegationOwner", fields: [userId], references: [id], onDelete: Cascade)
+  delegate User @relation("DelegationDelegate", fields: [delegateId], references: [id])
+
+  @@index([companyId, userId])
+  @@index([companyId, delegateId])
+}
+
+model Notification {
+  id         String    @id @default(cuid())
+  userId     String
+  type       String // e.g. "request.submitted", "request.approved", "balance.negative"
+  title      String
+  body       String?
+  entityType String? // "LeaveRequest", "User", ...
+  entityId   String?
+  readAt     DateTime?
+  createdAt  DateTime  @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, readAt])
+}
+
+model AuditLog {
+  id         String   @id @default(cuid())
+  companyId  String
+  actorId    String? // null = system
+  action     String // e.g. "leaveRequest.create", "balance.adjust", "user.offboard"
+  entityType String
+  entityId   String?
+  before     Json?
+  after      Json?
+  metadata   Json?
+  ip         String?
+  createdAt  DateTime @default(now())
+
+  company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  actor   User?   @relation(fields: [actorId], references: [id])
+
+  @@index([companyId, entityType, entityId])
+  @@index([createdAt])
+}
+
+model Integration {
+  id            String          @id @default(cuid())
+  companyId     String
+  userId        String? // null = company-wide connection
+  kind          IntegrationKind
+  tokenEncrypted String? // AES-GCM, key from env
+  config        Json?
+  enabled       Boolean         @default(true)
+  lastSyncedAt  DateTime?
+  createdAt     DateTime        @default(now())
+
+  company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  @@unique([companyId, userId, kind])
+}
+
+/**
+ * A file attached to a leave request (e.g. a medical certificate). The object
+ * is stored encrypted-at-rest in the S3-compatible bucket; this row holds
+ * metadata + the bucket key. `requestId` is null while an upload is staged for
+ * an in-progress request (I4).
+ */
+model Attachment {
+  id          String    @id @default(cuid())
+  companyId   String
+  requestId   String?
+  uploaderId  String
+  storageKey  String // bucket object key
+  fileName    String
+  contentType String
+  sizeBytes   Int
+  kind        String    @default("GENERAL") // GENERAL | MEDICAL_CERTIFICATE
+  deletedAt   DateTime? // soft delete: the object is purged from the bucket too
+  createdAt   DateTime  @default(now())
+
+  company  Company       @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  request  LeaveRequest? @relation(fields: [requestId], references: [id], onDelete: SetNull)
+  uploader User          @relation("AttachmentUploader", fields: [uploaderId], references: [id], onDelete: Cascade)
+
+  @@index([companyId, requestId])
+  @@index([companyId, uploaderId])
+}
+
+/**
+ * Transactional outbox (A5 / I3): the web app writes an `EmailMessage` row in
+ * the same DB transaction as the in-app `Notification`, then enqueues a
+ * BullMQ job as the fast path. The worker sends via Resend (dev mode when no
+ * `RESEND_API_KEY` is set) and the recurring outbox sweep is the crash-safe
+ * guarantee path. `dedupeKey` is the idempotency guard (e.g.
+ * `leave.starts:<requestId>:<date>` for scheduled reminders).
+ */
+model EmailMessage {
+  id           String            @id @default(cuid())
+  companyId    String
+  userId       String? // recipient user id (null for ad-hoc recipients)
+  to           String // recipient email address
+  name         String? // recipient display name
+  templateType String // "request.submitted" | "request.approved" | "leave.starts" | "digest.pending" | ...
+  data         Json // template variables
+  subject      String? // rendered at send time
+  html         String? // rendered at send time
+  text         String? // rendered at send time
+  dedupeKey    String?          @unique
+  status       EmailMessageStatus @default(QUEUED)
+  attempts     Int               @default(0)
+  error        String?
+  sentAt       DateTime?
+  createdAt    DateTime          @default(now())
+  updatedAt    DateTime          @updatedAt
+
+  company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  user    User?   @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([status, createdAt])
+  @@index([companyId])
+}
