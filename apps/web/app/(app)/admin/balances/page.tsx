@@ -40,7 +40,7 @@ export default async function AdminBalancesPage({
     distinct: ["periodStart"],
     orderBy: { periodStart: "desc" },
   });
-  const periodOptions = periodStarts.map((p) => ({
+  const periodOptions = periodStarts.map((p: (typeof periodStarts)[number]) => ({
     start: p.periodStart,
     label: t("leaveYearOption", { year: p.periodStart.slice(0, 4) }),
   }));
