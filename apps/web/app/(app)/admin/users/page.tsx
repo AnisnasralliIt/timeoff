@@ -61,7 +61,7 @@ export default async function AdminUsersPage() {
         </CardHeader>
         <CardContent className="p-0">
           <ul className="divide-y divide-border">
-            {users.map((u) => (
+            {users.map((u: (typeof users)[number]) => (
               <li key={u.id} className="flex flex-wrap items-center justify-between gap-4 px-5 py-3">
                 <div className="min-w-0">
                   <div className="flex flex-wrap items-center gap-2">

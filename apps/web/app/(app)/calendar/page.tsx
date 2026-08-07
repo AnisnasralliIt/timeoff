@@ -44,8 +44,8 @@ export default async function CalendarPage() {
   ]);
 
   const departments = showDepartmentFilter
-    ? allDepartments.map((d) => ({ id: d.id, name: d.name }))
-    : allDepartments.filter((d) => d.id === scope.departmentId).map((d) => ({ id: d.id, name: d.name }));
+    ? allDepartments.map((d: (typeof allDepartments)[number]) => ({ id: d.id, name: d.name }))
+    : allDepartments.filter((d: (typeof allDepartments)[number]) => d.id === scope.departmentId).map((d: (typeof allDepartments)[number]) => ({ id: d.id, name: d.name }));
 
   // Upcoming-leave card: scoped exactly like every other calendar query.
   const visible = await getVisibleUserIds(user);

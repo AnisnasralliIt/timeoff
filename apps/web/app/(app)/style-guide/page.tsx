@@ -56,7 +56,7 @@ import {
   Trash2,
 } from "lucide-react";
 const swatches = (prefix: string, steps: number[]) =>
-  steps.map((n) => ({ name: `${prefix}-${n}`, value: `var(--${prefix}-${n})` }));
+  steps.map((n: (typeof steps)[number]) => ({ name: `${prefix}-${n}`, value: `var(--${prefix}-${n})` }));
 
 const SCALES = {
   Lagoon: swatches("lagoon", [
@@ -168,7 +168,7 @@ export default function StyleGuidePage() {
           {Object.entries(SCALES).map(([name, colors]) => (
             <div key={name} className="space-y-2">
               <p className="text-sm font-medium text-foreground">{name}</p>
-              {colors.map((c) => (
+              {colors.map((c: (typeof colors)[number]) => (
                 <div key={c.name} className="flex items-center gap-3">
                   <div
                     className="h-8 flex-1 rounded-md border border-border"

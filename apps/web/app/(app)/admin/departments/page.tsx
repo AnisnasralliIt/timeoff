@@ -29,7 +29,7 @@ export default async function AdminDepartmentsPage() {
         </CardHeader>
         <CardContent className="p-0">
           <ul className="divide-y divide-border">
-            {departments.map((d) => (
+            {departments.map((d: (typeof departments)[number]) => (
               <li key={d.id} className="flex flex-wrap items-center justify-between gap-4 px-5 py-3">
                 <div className="flex items-center gap-3">
                   <p className="text-sm font-semibold text-foreground">{d.name}</p>

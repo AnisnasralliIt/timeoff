@@ -43,7 +43,7 @@ export default async function NewRequestPage() {
   );
 
   const balanceByType = new Map(
-    balances.map((b) => [b.leaveTypeId, availableBalance(b)]),
+    balances.map((b: (typeof balances)[number]) => [b.leaveTypeId, availableBalance(b)]),
   );
 
   return (
@@ -58,7 +58,7 @@ export default async function NewRequestPage() {
       </div>
 
       <RequestForm
-        leaveTypes={leaveTypes.map((t) => ({
+        leaveTypes={leaveTypes.map((t: (typeof leaveTypes)[number]) => ({
           id: t.id,
           name: t.name,
           isPaid: t.isPaid,
