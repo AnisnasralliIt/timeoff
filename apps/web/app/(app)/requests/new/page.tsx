@@ -43,7 +43,7 @@ export default async function NewRequestPage() {
   );
 
   const balanceByType = new Map(
-    balances.map((b: (typeof balances)[number]) => [b.leaveTypeId, availableBalance(b)]),
+    balances.map((b: (typeof balances)[number]) => [b.leaveTypeId, availableBalance(b)] as const),
   );
 
   return (
