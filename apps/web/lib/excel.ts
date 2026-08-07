@@ -88,7 +88,7 @@ export async function buildLeaveExportWorkbook(content: LeaveExportContent): Pro
     "rejectionReason",
     "submitted",
   ];
-  columnKeys.forEach((key, i) => {
+  columnKeys.forEach((key: Exclude<keyof LeaveExportHeaders, "sheetName">, i: number) => {
     const cell = headerRow.getCell(i + 1);
     cell.value = headers[key];
     cell.font = { bold: true, color: { argb: "FFFFFFFF" } };
@@ -113,7 +113,7 @@ export async function buildLeaveExportWorkbook(content: LeaveExportContent): Pro
     rejectionReason: 40,
     submitted: 18,
   };
-  columnKeys.forEach((key, i) => {
+  columnKeys.forEach((key: Exclude<keyof LeaveExportHeaders, "sheetName">, i: number) => {
     sheet.getColumn(i + 1).width = widths[key];
   });
 

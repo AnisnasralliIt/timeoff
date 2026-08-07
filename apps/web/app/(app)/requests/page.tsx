@@ -80,7 +80,7 @@ export default async function RequestsPage() {
         <Card>
           <CardContent className="p-0">
             <ul className="divide-y divide-border">
-              {requests.map((request) => {
+              {requests.map((request: (typeof requests)[number]) => {
                 const cancellable = request.status === "PENDING" ||
                   (request.status === "APPROVED" && request.startDate > today);
                 return (

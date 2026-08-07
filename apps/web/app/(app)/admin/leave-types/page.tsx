@@ -24,7 +24,7 @@ export default async function AdminLeaveTypesPage() {
         <CreateLeaveTypeDialog />
       </div>
       <div className="space-y-4">
-        {leaveTypes.map((type) => (
+        {leaveTypes.map((type: (typeof leaveTypes)[number]) => (
           <Card key={type.id}>
             <CardHeader>
               <CardTitle className="flex items-center gap-2 text-base">
@@ -43,7 +43,7 @@ export default async function AdminLeaveTypesPage() {
               </CardTitle>
             </CardHeader>
             <CardContent className="space-y-3">
-              {type.policies.map((policy) => (
+              {type.policies.map((policy: (typeof type.policies)[number]) => (
                 <div
                   key={policy.id}
                   className="flex flex-wrap items-center justify-between gap-4 rounded-md border border-border px-4 py-3"

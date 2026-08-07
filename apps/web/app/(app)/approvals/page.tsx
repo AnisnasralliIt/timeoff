@@ -76,7 +76,7 @@ export default async function ApprovalsPage() {
         <Card>
           <CardContent className="p-0">
             <ul className="divide-y divide-border">
-              {pending.map((request) => (
+              {pending.map((request: (typeof pending)[number]) => (
                 <li
                   key={request.id}
                   className="flex flex-wrap items-center justify-between gap-4 px-5 py-4"

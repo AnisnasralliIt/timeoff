@@ -61,13 +61,13 @@ export function Shell({
   const roleLabel = user.role ? tRole(user.role) : "";
 
   const visibleSections = navSections
-    .map((section) => ({
+    .map((section: (typeof navSections)[number]) => ({
       ...section,
       items: section.items.filter(
-        (item) => !item.minRole || roleAllowed(user, item.minRole),
+        (item: (typeof section.items)[number]) => !item.minRole || roleAllowed(user, item.minRole),
       ),
     }))
-    .filter((section) => section.items.length > 0);
+    .filter((section: (typeof navSections)[number]) => section.items.length > 0);
 
   const sidebar = (
     <div className="flex h-full flex-col">
@@ -77,13 +77,13 @@ export function Shell({
       </div>
       <Separator />
       <nav className="flex-1 space-y-5 overflow-y-auto px-3 py-5" aria-label={tNav("aria.main")}>
-        {visibleSections.map((section) => (
+        {visibleSections.map((section: (typeof visibleSections)[number]) => (
           <div key={section.titleKey}>
             <p className="px-3 pb-1.5 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
               {tNav(`sections.${section.titleKey}`)}
             </p>
             <ul className="space-y-0.5">
-              {section.items.map((item) => {
+              {section.items.map((item: (typeof section.items)[number]) => {
                 const active =
                   pathname === item.href || pathname.startsWith(`${item.href}/`);
                 const Icon = item.icon;

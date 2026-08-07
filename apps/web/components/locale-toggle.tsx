@@ -32,7 +32,7 @@ export function LocaleToggle() {
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end">
-        {locales.map((code) => (
+        {locales.map((code: (typeof locales)[number]) => (
           <DropdownMenuItem key={code} onSelect={() => select(code)}>
             <span className={code === locale ? "font-medium text-primary" : undefined}>
               {tLocales(code)}

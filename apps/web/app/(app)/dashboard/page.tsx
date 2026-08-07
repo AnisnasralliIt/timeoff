@@ -56,7 +56,7 @@ export default async function DashboardPage() {
   const showApprovals = user.role !== "EMPLOYEE";
   const pendingForApproval = showApprovals ? (await listPendingForApproval(user)).slice(0, 5) : [];
 
-  const vacation = balances.find((b) => b.leaveType.unit === "DAYS");
+  const vacation = balances.find((b: (typeof balances)[number]) => b.leaveType.unit === "DAYS");
   const firstName = user.name.split(" ")[0] ?? user.name;
   const gross = vacation ? vacation.accrued + vacation.carriedOver + vacation.adjustment : 0;
   const usedFraction = vacation && gross > 0 ? (vacation.used + vacation.pending) / gross : 0;
@@ -147,7 +147,7 @@ export default async function DashboardPage() {
                 <p className="text-sm text-muted-foreground">{t("caughtUp")}</p>
               ) : (
                 <ul className="divide-y divide-border">
-                  {pendingForApproval.map((request) => (
+                  {pendingForApproval.map((request: (typeof pendingForApproval)[number]) => (
                     <li key={request.id} className="flex items-center justify-between gap-4 py-3 first:pt-0 last:pb-0">
                       <div className="min-w-0">
                         <p className="truncate text-sm font-medium">{request.user.name}</p>
@@ -177,7 +177,7 @@ export default async function DashboardPage() {
               <p className="text-sm text-muted-foreground">{t("nothingBooked")}</p>
             ) : (
               <ul className="divide-y divide-border">
-                {upcoming.map((request) => (
+                {upcoming.map((request: (typeof upcoming)[number]) => (
                   <li key={request.id} className="flex items-center justify-between gap-4 py-3 first:pt-0 last:pb-0">
                     <div className="min-w-0">
                       <p className="text-sm font-medium">{formatSpan(request.startDate, request.endDate)}</p>
@@ -202,7 +202,7 @@ export default async function DashboardPage() {
               <p className="text-sm text-muted-foreground">{t("noRequestsYet")}</p>
             ) : (
               <ul className="divide-y divide-border">
-                {recent.map((request) => (
+                {recent.map((request: (typeof recent)[number]) => (
                   <li key={request.id} className="flex items-center justify-between gap-4 py-3 first:pt-0 last:pb-0">
                     <div className="min-w-0">
                       <p className="text-sm font-medium">{formatSpan(request.startDate, request.endDate)}</p>

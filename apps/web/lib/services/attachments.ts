@@ -156,7 +156,7 @@ export async function listAttachmentsForRequest(
     include: { uploader: { select: { name: true } } },
     orderBy: { createdAt: "desc" },
   });
-  return rows.map((a) => ({
+  return rows.map((a: (typeof rows)[number]) => ({
     id: a.id,
     fileName: a.fileName,
     contentType: a.contentType,

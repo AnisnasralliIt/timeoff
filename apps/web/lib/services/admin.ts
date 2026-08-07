@@ -40,7 +40,7 @@ export async function adminStats(user: SessionUser) {
       }),
     ]);
   const available = balances.reduce(
-    (s, b) => s + (b.accrued + b.carriedOver + b.adjustment - b.used - b.pending),
+    (s: number, b: (typeof balances)[number]) => s + (b.accrued + b.carriedOver + b.adjustment - b.used - b.pending),
     0,
   );
   return { activeUsers, pendingRequests, departments, leaveTypes, delegations, available, upcoming };
@@ -59,8 +59,8 @@ export async function listUsersForAdmin(user: SessionUser) {
     },
     orderBy: { name: "asc" },
   });
-  return rows.map((u) => {
-    const vacation = u.balances.find((b) => b.leaveType.name === "Vacation");
+  return rows.map((u: (typeof rows)[number]) => {
+    const vacation = u.balances.find((b: (typeof u.balances)[number]) => b.leaveType.name === "Vacation");
     return {
       id: u.id,
       name: u.name,
@@ -214,7 +214,7 @@ export async function listDepartmentsForAdmin(user: SessionUser) {
     include: { _count: { select: { users: true } }, users: { select: { id: true } } },
     orderBy: { sortOrder: "asc" },
   });
-  return departments.map((d) => ({
+  return departments.map((d: (typeof departments)[number]) => ({
     id: d.id,
     name: d.name,
     code: d.code,
@@ -441,7 +441,7 @@ export async function listBalancesForAdmin(
     },
     orderBy: [{ periodStart: "desc" }, { user: { name: "asc" } }],
   });
-  return rows.map((b) => ({
+  return rows.map((b: (typeof rows)[number]) => ({
     id: b.id,
     userName: b.user.name,
     userEmail: b.user.email,

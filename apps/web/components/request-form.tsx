@@ -88,7 +88,7 @@ export function RequestForm({
     leaveTypeId && balanceByType.has(leaveTypeId)
       ? balanceByType.get(leaveTypeId)!
       : null;
-  const selectedType = leaveTypes.find((t) => t.id === leaveTypeId);
+  const selectedType = leaveTypes.find((t: LeaveTypeOption) => t.id === leaveTypeId);
   const selectedRequiresAttachment = selectedType?.requiresAttachment ?? false;
 
   return (
@@ -107,7 +107,7 @@ export function RequestForm({
                 <SelectValue placeholder={t("chooseLeaveType")} />
               </SelectTrigger>
               <SelectContent>
-                {leaveTypes.map((type) => (
+                {leaveTypes.map((type: LeaveTypeOption) => (
                   <SelectItem key={type.id} value={type.id}>
                     {type.name}
                   </SelectItem>
@@ -138,7 +138,7 @@ export function RequestForm({
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  {DAY_PART_OPTIONS.map((value) => (
+                  {DAY_PART_OPTIONS.map((value: (typeof DAY_PART_OPTIONS)[number]) => (
                     <SelectItem key={value} value={value}>
                       {tDayPart(value)}
                     </SelectItem>
@@ -152,7 +152,7 @@ export function RequestForm({
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  {DAY_PART_OPTIONS.map((value) => (
+                  {DAY_PART_OPTIONS.map((value: (typeof DAY_PART_OPTIONS)[number]) => (
                     <SelectItem key={value} value={value}>
                       {tDayPart(value)}
                     </SelectItem>

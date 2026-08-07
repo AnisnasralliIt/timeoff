@@ -65,7 +65,7 @@ export function LeaveBar({
             )}
             style={{ borderColor: "rgba(255,255,255,0.25)" }}
           >
-            {segs.map((seg, i) => (
+            {segs.map((seg: BarSegment, i: number) => (
               <span
                 key={i}
                 className={cn("flex-1", seg.half ? "h-1/2" : "h-full")}

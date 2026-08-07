@@ -198,7 +198,7 @@ export function CalendarExplorer({
               { value: "list", label: t("viewList") },
               { value: "team", label: t("viewTeam") },
             ] as { value: ViewMode; label: string }[]
-          ).map((v) => (
+          ).map((v: { value: ViewMode; label: string }) => (
             <button
               key={v.value}
               type="button"
@@ -331,7 +331,7 @@ export function CalendarExplorer({
           aria-label={t("leaveTypeFilter")}
         >
           <option value="">{t("allLeaveTypes")}</option>
-          {leaveTypes.map((lt) => (
+          {leaveTypes.map((lt: { id: string; name: string; color: string }) => (
             <option key={lt.id} value={lt.id}>
               {lt.name}
             </option>
@@ -345,7 +345,7 @@ export function CalendarExplorer({
             aria-label={t("departmentFilter")}
           >
             <option value="">{t("allDepartments")}</option>
-            {departments.map((d) => (
+            {departments.map((d: { id: string; name: string }) => (
               <option key={d.id} value={d.id}>
                 {d.name}
               </option>

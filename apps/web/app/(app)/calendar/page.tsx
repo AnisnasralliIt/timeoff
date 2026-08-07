@@ -80,7 +80,7 @@ export default async function CalendarPage() {
             canExport={canExport(user)}
             showDepartmentFilter={showDepartmentFilter}
             departments={departments}
-            leaveTypes={leaveTypes.map((lt) => ({
+            leaveTypes={leaveTypes.map((lt: (typeof leaveTypes)[number]) => ({
               id: lt.id,
               name: lt.name,
               color: lt.color,
@@ -99,7 +99,7 @@ export default async function CalendarPage() {
               </p>
             ) : (
               <ul className="mt-2 space-y-2">
-                {upcoming.map((request) => (
+                {upcoming.map((request: (typeof upcoming)[number]) => (
                   <li
                     key={request.id}
                     className="flex items-center justify-between gap-2 text-sm"

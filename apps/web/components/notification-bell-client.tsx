@@ -99,7 +99,7 @@ export function NotificationBellClient({ unread, items }: { unread: number; item
         {items.length === 0 ? (
           <p className="px-2 py-8 text-center text-sm text-muted-foreground">{t("nothingHere")}</p>
         ) : (
-          items.slice(0, 8).map((item) => (
+          items.slice(0, 8).map((item: (typeof items)[number]) => (
             <DropdownMenuItem
               key={item.id}
               asChild

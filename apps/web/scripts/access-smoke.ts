@@ -39,7 +39,7 @@ import assert from "node:assert/strict";
 import bcrypt from "bcryptjs";
 import { prisma } from "@timeoff/db";
 import type { SessionUser } from "../lib/session";
-import type { RequestStatus } from "../lib/calendar-shared";
+import type { CalendarLeave, CalendarRosterMember, RequestStatus } from "../lib/calendar-shared";
 import {
   getVisibleUserIds,
   getUserScope,
@@ -65,6 +65,7 @@ import {
   listCalendarRoster,
   listExportRows,
   canExport,
+  type ExportRow,
 } from "../lib/services/calendar";
 import { buildLeaveExportWorkbook } from "../lib/excel";
 
@@ -176,7 +177,7 @@ async function main() {
   await check("HR/ADMIN/SUPER_ADMIN see cross-department pending requests", async () => {
     const queues = [await listPendingForApproval(hr), await listPendingForApproval(admin), await listPendingForApproval(superAdmin)];
     for (const q of queues) {
-      assert(q.some((r) => r.user.departmentId === productPending.user.departmentId), "queue must include Product requests");
+      assert(q.some((r: (typeof q)[number]) => r.user.departmentId === productPending.user.departmentId), "queue must include Product requests");
     }
   });
   await check("MANAGER queue is scoped to own department", async () => {
@@ -363,7 +364,7 @@ async function main() {
   await check("lukas calendar sees only Engineering requests", async () => {
     const rows = await listCalendarRequests(lukas, YEAR);
     assert(rows.length > 0, "expected Engineering requests in 2026");
-    const productIds = new Set((await listCalendarRoster(emma)).map((u) => u.id));
+    const productIds = new Set((await listCalendarRoster(emma)).map((u: CalendarRosterMember) => u.id));
     for (const r of rows) {
       assert(!productIds.has(r.userId), `Product request leaked to Engineering manager: ${r.userName}`);
     }
@@ -371,7 +372,7 @@ async function main() {
 
   await check("admin calendar sees cross-department requests", async () => {
     const rows = await listCalendarRequests(admin, YEAR);
-    const depts = new Set(rows.map((r) => r.departmentId));
+    const depts = new Set(rows.map((r: CalendarLeave) => r.departmentId));
     assert(rows.length > 0);
     const productDept = (await prisma.user.findUnique({ where: { id: emma.id } }))?.departmentId;
     const engDept = (await prisma.user.findUnique({ where: { id: felix.id } }))?.departmentId;
@@ -386,8 +387,8 @@ async function main() {
     for (const m of lukasRoster) assert.equal(m.departmentId, dept, "cross-department roster member leaked");
     const adminRoster = await listCalendarRoster(admin);
     const emmaRow = await prisma.user.findUnique({ where: { id: emma.id } });
-    assert(adminRoster.some((m) => m.id === emmaRow?.id), "admin roster missing Product user");
-    assert(!lukasRoster.some((m) => m.id === emmaRow?.id), "manager roster leaked Product user");
+    assert(adminRoster.some((m: CalendarRosterMember) => m.id === emmaRow?.id), "admin roster missing Product user");
+    assert(!lukasRoster.some((m: CalendarRosterMember) => m.id === emmaRow?.id), "manager roster leaked Product user");
   });
 
   await check("canExport: EMPLOYEE denied, MANAGER + company-wide allowed", () => {
@@ -444,7 +445,7 @@ async function main() {
       to: "2026-12-31",
       statuses: ["APPROVED", "PENDING"],
     });
-    const depts = new Set(rows.map((r) => r.department));
+    const depts = new Set(rows.map((r: ExportRow) => r.department));
     assert(rows.length > 0);
     assert(depts.has("Engineering"), "admin export missing Engineering");
     assert(depts.has("Product"), "admin export missing Product");

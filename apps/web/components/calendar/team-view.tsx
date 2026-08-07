@@ -68,12 +68,12 @@ export function TeamView({ requests, roster, holidays, from, to }: TeamViewProps
     barsByUser.set(r.userId, list);
   }
 
-  const rows = roster.map((member) => ({
+  const rows = roster.map((member: CalendarRosterMember) => ({
     member,
     bars: (barsByUser.get(member.id) ?? [])
-      .map((leave) => ({ leave, clip: clipLeaveToDays(leave, days) }))
+      .map((leave: CalendarLeave) => ({ leave, clip: clipLeaveToDays(leave, days) }))
       .filter((b): b is { leave: CalendarLeave; clip: { start: number; end: number } } => b.clip !== null)
-      .map((b) => ({ ...b, segs: leaveSegments(b.leave, days) })),
+      .map((b: { leave: CalendarLeave; clip: { start: number; end: number } }) => ({ ...b, segs: leaveSegments(b.leave, days) })),
   }));
 
   return (
@@ -86,7 +86,7 @@ export function TeamView({ requests, roster, holidays, from, to }: TeamViewProps
               {t("teamHeaderEmployee")}
             </div>
             <div className="relative h-7 shrink-0" style={{ width }}>
-              {spans.map((s) => (
+              {spans.map((s: MonthSpan) => (
                 <div
                   key={`${s.label}-${s.start}`}
                   className="absolute inset-y-0 border-r border-border px-1.5 pt-1 text-[10px] font-medium uppercase tracking-wide text-muted-foreground"
@@ -102,7 +102,7 @@ export function TeamView({ requests, roster, holidays, from, to }: TeamViewProps
           <div className="flex border-b border-border">
             <div className="sticky left-0 z-20 w-44 shrink-0 border-r border-border bg-card" />
             <div className="flex h-6 shrink-0" style={{ width }}>
-              {days.map((d) => (
+              {days.map((d: string) => (
                 <div
                   key={d}
                   className={cn(
@@ -119,7 +119,7 @@ export function TeamView({ requests, roster, holidays, from, to }: TeamViewProps
           </div>
 
           {/* Rows */}
-          {rows.map(({ member, bars }) => (
+          {rows.map(({ member, bars }: (typeof rows)[number]) => (
             <div key={member.id} className="flex border-b border-border last:border-b-0">
               <div className="sticky left-0 z-10 flex w-44 shrink-0 items-center gap-1.5 border-r border-border bg-card px-3 py-1">
                 <span className="min-w-0 flex-1 truncate text-xs font-medium text-foreground">
@@ -128,7 +128,7 @@ export function TeamView({ requests, roster, holidays, from, to }: TeamViewProps
               </div>
               <div className="relative shrink-0" style={{ width, height: ROW_HEIGHT }}>
                 <div className="absolute inset-0 flex">
-                  {days.map((d) => (
+                  {days.map((d: string) => (
                     <div
                       key={d}
                       className={cn(
@@ -139,7 +139,7 @@ export function TeamView({ requests, roster, holidays, from, to }: TeamViewProps
                     />
                   ))}
                 </div>
-                {bars.map((b) => (
+                {bars.map((b: (typeof bars)[number]) => (
                   <LeaveBar
                     key={b.leave.id}
                     leave={b.leave}

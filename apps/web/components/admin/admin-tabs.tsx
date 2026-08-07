@@ -19,7 +19,7 @@ export function AdminTabs() {
   const pathname = usePathname();
   return (
     <nav aria-label={t("ariaSections")} className="flex flex-wrap gap-1 border-b border-border">
-      {tabs.map((tab) => {
+      {tabs.map((tab: (typeof tabs)[number]) => {
         const Icon = tab.icon;
         const label = t(tab.key);
         const active =

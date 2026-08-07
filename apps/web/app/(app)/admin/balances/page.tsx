@@ -75,7 +75,7 @@ export default async function AdminBalancesPage({
                   </Badge>
                 </div>
                 <ul className="mt-2 space-y-2">
-                  {entry.rows.map((row) => (
+                  {entry.rows.map((row: (typeof rows)[number]) => (
                     <li key={row.id} className="rounded-md border border-border px-4 py-2">
                       <BalanceRowSummary row={row} />
                     </li>

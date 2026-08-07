@@ -95,7 +95,7 @@ export function CreateUserDialog({
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  {departments.map((d) => (
+                  {departments.map((d: (typeof departments)[number]) => (
                     <SelectItem key={d.id} value={d.id}>
                       {d.name}
                     </SelectItem>
@@ -109,7 +109,7 @@ export function CreateUserDialog({
                   <SelectValue placeholder={t("noManager")} />
                 </SelectTrigger>
                 <SelectContent>
-                  {managers.map((m) => (
+                  {managers.map((m: (typeof managers)[number]) => (
                     <SelectItem key={m.id} value={m.id}>
                       {m.name}
                     </SelectItem>

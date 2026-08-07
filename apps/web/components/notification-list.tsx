@@ -82,7 +82,7 @@ export function NotificationList({ items, unread }: { items: NotificationRow[]; 
         <p className="py-16 text-center text-sm text-muted-foreground">{t("emptyDescription")}</p>
       ) : (
         <ul className="divide-y divide-border rounded-lg border border-border bg-card">
-          {items.map((item) => {
+          {items.map((item: (typeof items)[number]) => {
             const href = hrefFor(item);
             const localized = localize(item.title, item.body);
             const inner = (

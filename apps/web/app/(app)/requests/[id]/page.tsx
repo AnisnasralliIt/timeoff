@@ -182,7 +182,7 @@ export default async function RequestDetailPage({ params }: { params: Promise<{ 
             </p>
           ) : (
             <ol className="space-y-4">
-              {request.approvalSteps.map((step, i) => (
+              {request.approvalSteps.map((step: (typeof request.approvalSteps)[number], i: number) => (
                 <li key={step.id} className="relative flex gap-4">
                   <div className="flex flex-col items-center">
                     <span
@@ -237,7 +237,7 @@ export default async function RequestDetailPage({ params }: { params: Promise<{ 
             />
           ) : (
             <ul className="divide-y divide-border">
-              {attachments.map((attachment) => (
+              {attachments.map((attachment: (typeof attachments)[number]) => (
                 <li key={attachment.id} className="flex items-center justify-between gap-3 py-3 first:pt-0 last:pb-0">
                   <div className="min-w-0">
                     <p className="truncate text-sm font-medium text-foreground">{attachment.fileName}</p>

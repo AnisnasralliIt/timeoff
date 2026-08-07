@@ -116,8 +116,8 @@ async function getPolicy(
     },
   });
   return (
-    policies.find((p) => p.departmentId === departmentId) ??
-    policies.find((p) => p.departmentId === null) ??
+    policies.find((p: (typeof policies)[number]) => p.departmentId === departmentId) ??
+    policies.find((p: (typeof policies)[number]) => p.departmentId === null) ??
     null
   );
 }
@@ -223,7 +223,7 @@ async function activeDelegateFor(
     orderBy: { createdAt: "desc" },
   });
   const current = rows.find(
-    (d) => (!d.startsOn || d.startsOn <= onDate) && (!d.endsOn || d.endsOn >= onDate),
+    (d: (typeof rows)[number]) => (!d.startsOn || d.startsOn <= onDate) && (!d.endsOn || d.endsOn >= onDate),
   );
   return current?.delegateId ?? null;
 }
@@ -479,7 +479,7 @@ export async function createLeaveRequest(user: SessionUser, input: CreateLeaveIn
         status,
         approvedById: status === "APPROVED" ? user.id : undefined,
         approvedAt: status === "APPROVED" ? new Date() : undefined,
-        days: { create: days.map((day) => ({ date: day.date, dayPart: day.dayPart })) },
+        days: { create: days.map((day: (typeof days)[number]) => ({ date: day.date, dayPart: day.dayPart })) },
       },
     });
     if (attachmentIds.length > 0) {

@@ -59,7 +59,7 @@ export function useNotifLocalized() {
       const match = title.match(pattern.re);
       if (match) {
         const values: Record<string, string | number> = {};
-        pattern.values.forEach((key, index) => {
+        pattern.values.forEach((key: string, index: number) => {
           const raw = match[index + 1];
           if (raw !== undefined) values[key] = raw;
         });
@@ -73,7 +73,7 @@ export function useNotifLocalized() {
         const match = body.match(pattern.re);
         if (match) {
           const values: Record<string, string | number> = {};
-          pattern.values.forEach((key, index) => {
+          pattern.values.forEach((key: string, index: number) => {
             const raw = match[index + 1];
             if (raw === undefined) return;
             if (key === "count" || key === "level") values[key] = Number(raw);

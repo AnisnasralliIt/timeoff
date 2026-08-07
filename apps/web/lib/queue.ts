@@ -29,7 +29,7 @@ export async function enqueueEmails(messageIds: string[]): Promise<void> {
   try {
     const q = emailsQueue();
     await q.addBulk(
-      messageIds.map((messageId) => ({
+      messageIds.map((messageId: (typeof messageIds)[number]) => ({
         name: "email.send",
         data: { messageId },
         opts: { attempts: 1, removeOnComplete: 1000, removeOnFail: 5000 },

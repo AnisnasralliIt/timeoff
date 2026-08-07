@@ -146,7 +146,7 @@ export async function listCalendarRoster(user: SessionUser): Promise<CalendarRos
     },
     orderBy: [{ department: { sortOrder: "asc" } }, { name: "asc" }],
   });
-  return rows.map((r) => ({
+  return rows.map((r: (typeof rows)[number]) => ({
     id: r.id,
     name: r.name,
     departmentId: r.departmentId,

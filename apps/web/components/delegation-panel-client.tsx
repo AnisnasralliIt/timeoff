@@ -66,7 +66,7 @@ function CreateDelegationForm({ candidates }: { candidates: DelegationCandidate[
               <SelectValue placeholder={t("whoCoversYou")} />
             </SelectTrigger>
             <SelectContent>
-              {candidates.map((c) => (
+              {candidates.map((c: (typeof candidates)[number]) => (
                 <SelectItem key={c.id} value={c.id}>
                   {c.name} · {c.role}
                 </SelectItem>
@@ -172,7 +172,7 @@ export function DelegationPanelClient({
       {canDelegate ? <CreateDelegationForm candidates={candidates} /> : null}
       {delegations.length > 0 ? (
         <ul className="divide-y divide-border rounded-md border border-border">
-          {delegations.map((delegation) => (
+          {delegations.map((delegation: (typeof delegations)[number]) => (
             <DelegationRow
               key={delegation.id}
               delegation={delegation}

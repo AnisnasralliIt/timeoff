@@ -81,7 +81,7 @@ export default async function WorkforcePage() {
       }),
     ]);
 
-  const yearDays = yearRequests.reduce((sum, r) => sum + r.totalDays, 0);
+  const yearDays = yearRequests.reduce((sum: number, r: (typeof yearRequests)[number]) => sum + r.totalDays, 0);
   const utilizationByType = new Map<string, { name: string; color: string; days: number }>();
   for (const r of yearRequests) {
     const entry = utilizationByType.get(r.leaveTypeId) ?? {
@@ -92,7 +92,8 @@ export default async function WorkforcePage() {
     entry.days += r.totalDays;
     utilizationByType.set(r.leaveTypeId, entry);
   }
-  const utilization = [...utilizationByType.values()].sort((a, b) => b.days - a.days);
+  const utilizationValues = [...utilizationByType.values()];
+  const utilization = utilizationValues.sort((a: (typeof utilizationValues)[number], b: (typeof utilizationValues)[number]) => b.days - a.days);
 
   return (
     <div className="space-y-6">
@@ -141,10 +142,10 @@ export default async function WorkforcePage() {
             {t("headcountByDepartment")}
           </h2>
           <ul className="mt-3 divide-y divide-border">
-            {departments.map((department) => {
-              const offNow = department.users.filter((member) =>
+            {departments.map((department: (typeof departments)[number]) => {
+              const offNow = department.users.filter((member: (typeof department.users)[number]) =>
                 approvedToday.some(
-                  (r) => r.userId === member.id && r.startDate <= today && r.endDate >= today,
+                  (r: (typeof approvedToday)[number]) => r.userId === member.id && r.startDate <= today && r.endDate >= today,
                 ),
               ).length;
               return (
@@ -175,7 +176,7 @@ export default async function WorkforcePage() {
             <p className="mt-3 text-sm text-muted-foreground">{t("nothingApprovedYet")}</p>
           ) : (
             <ul className="mt-3 space-y-2.5">
-              {utilization.map((entry) => {
+              {utilization.map((entry: (typeof utilization)[number]) => {
                 const pct = yearDays ? Math.round((entry.days / yearDays) * 100) : 0;
                 return (
                   <li key={entry.name} className="text-sm">
@@ -214,7 +215,7 @@ export default async function WorkforcePage() {
           <p className="mt-3 text-sm text-muted-foreground">{t("noUpcomingApprovedLeave")}</p>
         ) : (
           <ul className="mt-3 divide-y divide-border">
-            {approvedToday.map((request) => (
+            {approvedToday.map((request: (typeof approvedToday)[number]) => (
               <li key={request.id} className="flex items-center justify-between gap-4 py-2.5 text-sm">
                 <div className="flex items-center gap-3 min-w-0">
                   <span

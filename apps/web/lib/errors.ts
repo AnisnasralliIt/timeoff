@@ -102,7 +102,7 @@ export function errorKeyFor(message: string): ServerErrorShape | null {
     const match = message.match(pattern.re);
     if (match) {
       const errorValues: ServerErrorValues = {};
-      pattern.values.forEach((key, index) => {
+      pattern.values.forEach((key: string, index: number) => {
         const raw = match[index + 1] ?? "";
         errorValues[key] = /^-?\d+(\.\d+)?$/.test(raw) ? Number(raw) : raw;
       });

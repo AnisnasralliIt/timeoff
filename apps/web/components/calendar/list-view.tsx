@@ -61,16 +61,16 @@ export function ListView({ requests, holidays, from, to }: ListViewProps) {
   if (group === "date") {
     const days = eachDay(from, to);
     const rows = days
-      .map((day) => ({
+      .map((day: (typeof days)[number]) => ({
         day,
-        off: requests.filter((r) => day >= r.startDate && day <= r.endDate),
+        off: requests.filter((r: CalendarLeave) => day >= r.startDate && day <= r.endDate),
       }))
-      .filter((r) => r.off.length > 0);
+      .filter((r: { day: string; off: CalendarLeave[] }) => r.off.length > 0);
     return (
       <div className="rounded-lg border border-border bg-card p-4 shadow-sm">
         <GroupToggle value={group} onChange={setGroup} t={t} />
         <ul className="mt-3 divide-y divide-border">
-          {rows.map(({ day, off }) => (
+          {rows.map(({ day, off }: (typeof rows)[number]) => (
             <li key={day} className="flex flex-wrap items-baseline gap-x-4 gap-y-1 py-2.5 text-sm">
               <span
                 className={cn(
@@ -86,7 +86,7 @@ export function ListView({ requests, holidays, from, to }: ListViewProps) {
                 ) : null}
               </span>
               <span className="flex flex-wrap items-center gap-x-2 gap-y-1">
-                {off.map((r) => (
+                {off.map((r: CalendarLeave) => (
                   <Link
                     key={r.id}
                     href={`/requests/${r.id}`}
@@ -112,7 +112,7 @@ export function ListView({ requests, holidays, from, to }: ListViewProps) {
     list.push(r);
     byUser.set(r.userId, list);
   }
-  const users = [...byUser.entries()].sort((a, b) => a[1][0]!.userName.localeCompare(b[1][0]!.userName));
+  const users = [...byUser.entries()].sort((a: [string, CalendarLeave[]], b: [string, CalendarLeave[]]) => a[1][0]!.userName.localeCompare(b[1][0]!.userName));
   return (
     <div className="rounded-lg border border-border bg-card p-4 shadow-sm">
       <GroupToggle value={group} onChange={setGroup} t={t} />
@@ -125,7 +125,7 @@ export function ListView({ requests, holidays, from, to }: ListViewProps) {
               <span className="text-xs font-normal text-muted-foreground">{list[0]!.departmentName}</span>
             </p>
             <ul className="mt-1.5 space-y-1 pl-6">
-              {list.map((r) => (
+              {list.map((r: CalendarLeave) => (
                 <li key={r.id} className="flex flex-wrap items-center gap-x-3 gap-y-0.5 text-sm">
                   <Link
                     href={`/requests/${r.id}`}
@@ -165,7 +165,7 @@ function GroupToggle({
   ];
   return (
     <div className="inline-flex h-8 items-center gap-0.5 rounded-md bg-muted p-0.5 text-muted-foreground">
-      {options.map((opt) => (
+      {options.map((opt: { value: "date" | "employee"; label: string }) => (
         <button
           key={opt.value}
           type="button"

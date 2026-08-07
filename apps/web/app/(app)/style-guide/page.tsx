@@ -462,7 +462,7 @@ export default function StyleGuidePage() {
                 </div>
                 <div className="space-y-3">
                   {["Submitted by Ada", "Approved by Grace", "Synced to calendar"].map(
-                    (s, i) => (
+                    (s: string, i: number) => (
                       <div key={s} className="flex items-center gap-3">
                         <div className="flex size-6 items-center justify-center rounded-full bg-primary-subtle text-xs font-medium text-primary-subtle-foreground">
                           {i + 1}

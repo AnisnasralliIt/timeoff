@@ -16,7 +16,7 @@ export async function NotificationBell() {
   return (
     <NotificationBellClient
       unread={unread}
-      items={items.map((notification) => ({
+      items={items.map((notification: (typeof items)[number]) => ({
         id: notification.id,
         title: notification.title,
         body: notification.body,

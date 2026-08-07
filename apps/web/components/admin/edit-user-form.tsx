@@ -57,10 +57,10 @@ export function EditUserDialog({
   const [role, setRole] = useState(user.role);
   const [status, setStatus] = useState(user.status);
   const [departmentId, setDepartmentId] = useState(
-    departments.find((d) => d.name === user.department)?.id ?? departments[0]?.id ?? "",
+    departments.find((d: (typeof departments)[number]) => d.name === user.department)?.id ?? departments[0]?.id ?? "",
   );
   const [managerId, setManagerId] = useState(
-    managers.find((m) => m.name === user.manager)?.id ?? "",
+    managers.find((m: (typeof managers)[number]) => m.name === user.manager)?.id ?? "",
   );
   const [employmentType, setEmploymentType] = useState(user.employmentType);
 
@@ -117,7 +117,7 @@ export function EditUserDialog({
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  {departments.map((d) => (
+                  {departments.map((d: (typeof departments)[number]) => (
                     <SelectItem key={d.id} value={d.id}>
                       {d.name}
                     </SelectItem>
@@ -131,7 +131,7 @@ export function EditUserDialog({
                   <SelectValue placeholder={t("noManager")} />
                 </SelectTrigger>
                 <SelectContent>
-                  {managers.map((m) => (
+                  {managers.map((m: (typeof managers)[number]) => (
                     <SelectItem key={m.id} value={m.id}>
                       {m.name}
                     </SelectItem>

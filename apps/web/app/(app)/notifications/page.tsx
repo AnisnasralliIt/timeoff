@@ -19,7 +19,7 @@ export default async function NotificationsPage() {
   return (
     <NotificationList
       unread={unread}
-      items={notifications.map((notification) => ({
+      items={notifications.map((notification: (typeof notifications)[number]) => ({
         id: notification.id,
         title: notification.title,
         body: notification.body,

@@ -35,19 +35,19 @@ function isWeekendDay(iso: string): boolean {
 }
 
 function weekdayLabels(locale: string): string[] {
-  const days = [1, 2, 3, 4, 5, 6, 0].map((d) =>
+  const days = [1, 2, 3, 4, 5, 6, 0].map((d: number) =>
     new Date(2024, 0, 1 + d).toLocaleDateString(locale, { weekday: "short" }),
   );
-  return days.map((d) => d.charAt(0).toUpperCase() + d.slice(1));
+  return days.map((d: string) => d.charAt(0).toUpperCase() + d.slice(1));
 }
 
 /** Greedy lane assignment so overlapping bars stack instead of colliding. */
 function layoutWeek(weekDays: string[], requests: CalendarLeave[]): PlacedBar[] {
   const clipped = requests
-    .map((leave) => ({ leave, clip: clipLeaveToDays(leave, weekDays) }))
+    .map((leave: CalendarLeave) => ({ leave, clip: clipLeaveToDays(leave, weekDays) }))
     .filter((b): b is { leave: CalendarLeave; clip: { start: number; end: number } } => b.clip !== null);
   clipped.sort(
-    (a, b) => a.clip.start - b.clip.start || a.clip.end - a.clip.end,
+    (a: (typeof clipped)[number], b: (typeof clipped)[number]) => a.clip.start - b.clip.start || a.clip.end - b.clip.end,
   );
   const laneEnds: number[] = [];
   const placed: PlacedBar[] = [];
@@ -73,7 +73,7 @@ export function MonthView({ requests, holidays, year, month }: MonthViewProps) {
   const monthStart = `${year}-${String(month).padStart(2, "0")}-01`;
   const monthEnd = `${year}-${String(month).padStart(2, "0")}-${String(new Date(year, month, 0).getDate()).padStart(2, "0")}`;
   const today = todayISO();
-  const hasLeaveInMonth = requests.some((r) => r.startDate <= monthEnd && r.endDate >= monthStart);
+  const hasLeaveInMonth = requests.some((r: CalendarLeave) => r.startDate <= monthEnd && r.endDate >= monthStart);
 
   return (
     <div className="select-none rounded-lg border border-border bg-card p-3 shadow-sm">
@@ -86,7 +86,7 @@ export function MonthView({ requests, holidays, year, month }: MonthViewProps) {
         </p>
       </div>
       <div className="grid grid-cols-7 gap-0.5 text-center">
-        {weekdayLabels(locale).map((w) => (
+        {weekdayLabels(locale).map((w: string) => (
           <div
             key={w}
             className="py-1 text-[11px] font-medium uppercase tracking-wide text-muted-foreground"
@@ -95,12 +95,12 @@ export function MonthView({ requests, holidays, year, month }: MonthViewProps) {
           </div>
         ))}
       </div>
-      {weeks.map((week, wi) => {
+      {weeks.map((week: (string | null)[], wi: number) => {
         const weekDays = week.filter((d): d is string => d !== null);
         const placed = layoutWeek(weekDays, requests);
         return (
           <div key={wi} className="relative grid grid-cols-7 border-b border-border last:border-b-0">
-            {week.map((day, ci) => {
+            {week.map((day: string | null, ci: number) => {
               const isToday = day === today;
               const muted = day !== null && (isWeekendDay(day) || holidays.includes(day));
               return (
@@ -126,7 +126,7 @@ export function MonthView({ requests, holidays, year, month }: MonthViewProps) {
                 </div>
               );
             })}
-            {placed.map((bar) => (
+            {placed.map((bar: PlacedBar) => (
               <LeaveBar
                 key={`${bar.leave.id}-w${wi}`}
                 leave={bar.leave}

@@ -35,7 +35,7 @@ export default async function NewRequestPage() {
   ]);
 
   const holidayDates = new Set(
-    holidays.flatMap((h) =>
+    holidays.flatMap((h: (typeof holidays)[number]) =>
       h.isRecurring
         ? [`${today.slice(0, 4)}-${h.date.slice(5)}`, `${Number(today.slice(0, 4)) + 1}-${h.date.slice(5)}`]
         : [h.date],

@@ -62,7 +62,7 @@ export function BalanceAdjustDialog({
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                {users.map((u) => (
+                {users.map((u: (typeof users)[number]) => (
                   <SelectItem key={u.id} value={u.id}>
                     {u.name}
                   </SelectItem>
@@ -76,7 +76,7 @@ export function BalanceAdjustDialog({
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                {leaveTypes.map((lt) => (
+                {leaveTypes.map((lt: (typeof leaveTypes)[number]) => (
                   <SelectItem key={lt.id} value={lt.id}>
                     {lt.name}
                   </SelectItem>
@@ -91,7 +91,7 @@ export function BalanceAdjustDialog({
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  {periodOptions.map((p) => (
+                  {periodOptions.map((p: (typeof periodOptions)[number]) => (
                     <SelectItem key={p.start} value={p.start}>
                       {p.label}
                     </SelectItem>

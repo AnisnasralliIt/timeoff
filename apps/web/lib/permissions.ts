@@ -70,5 +70,5 @@ export async function getVisibleUserIds(user: SessionUser): Promise<"all" | stri
     where: { companyId: user.companyId, departmentId, status: "ACTIVE" },
     select: { id: true },
   });
-  return rows.map((r) => r.id);
+  return rows.map((r: (typeof rows)[number]) => r.id);
 }
