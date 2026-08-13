@@ -21,8 +21,7 @@ export function LoginForm({ showGoogle }: { showGoogle: boolean }) {
           name="email"
           type="email"
           autoComplete="email"
-          placeholder="you@acme.dev"
-          defaultValue="admin@acme.dev"
+          placeholder="name@company.com"
           required
         />
       </Field>
@@ -34,7 +33,6 @@ export function LoginForm({ showGoogle }: { showGoogle: boolean }) {
           type="password"
           autoComplete="current-password"
           placeholder="••••••••"
-          defaultValue="password123"
           required
         />
       </Field>
@@ -69,10 +67,6 @@ export function LoginForm({ showGoogle }: { showGoogle: boolean }) {
           </Button>
         </>
       ) : null}
-
-      <p className="pt-2 text-center text-xs text-muted-foreground">
-        {t("demo", { password: "password123" })}
-      </p>
     </form>
   );
 }

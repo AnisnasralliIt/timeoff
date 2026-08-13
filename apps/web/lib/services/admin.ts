@@ -1,10 +1,11 @@
 import bcrypt from "bcryptjs";
 import { prisma, type Role, type UserStatus } from "@timeoff/db";
 import type { SessionUser } from "@/lib/session";
-import { audit, LeaveError } from "@/lib/services/leave";
+import { audit, LeaveError, seedBalancesForNewUser, syncCurrentAccruals } from "@/lib/services/leave";
 import { enqueueOutbox } from "@/lib/emails";
 import { enqueueEmails } from "@/lib/queue";
-import { canGrantRole, canManageUsers } from "@/lib/permissions";
+import { canGrantRole, canManageUsers, isSupervisorRole } from "@/lib/permissions";
+import { deleteObject } from "@/lib/attachments/storage";
 
 export { LeaveError };
 
@@ -19,6 +20,8 @@ export function requireHr(user: SessionUser): void {
 export async function adminStats(user: SessionUser) {
   requireHr(user);
   const companyId = user.companyId!;
+  // Reconcile current-year rows to the cumulative accrual before reporting.
+  await syncCurrentAccruals(prisma, companyId);
   const today = new Date().toISOString().slice(0, 10);
   const [activeUsers, pendingRequests, departments, leaveTypes, delegations, balances, upcoming] =
     await Promise.all([
@@ -50,6 +53,9 @@ export async function adminStats(user: SessionUser) {
 
 export async function listUsersForAdmin(user: SessionUser) {
   requireHr(user);
+  // Bring current-year accrued balances up to date so the directory shows the
+  // cumulative balance (manual adjustments / carry-over are preserved).
+  await syncCurrentAccruals(prisma, user.companyId!);
   const rows = await prisma.user.findMany({
     where: { companyId: user.companyId },
     include: {
@@ -60,7 +66,13 @@ export async function listUsersForAdmin(user: SessionUser) {
     orderBy: { name: "asc" },
   });
   return rows.map((u: (typeof rows)[number]) => {
-    const vacation = u.balances.find((b: (typeof u.balances)[number]) => b.leaveType.name === "Vacation");
+    // Multiple leave years now coexist (history rows are kept): prefer the
+    // row covering today, falling back to the latest — never an arbitrary one.
+    const today = new Date().toISOString().slice(0, 10);
+    const vacations = u.balances.filter((b: (typeof u.balances)[number]) => b.leaveType.name === "Vacation");
+    const vacation =
+      vacations.find((b: (typeof u.balances)[number]) => b.periodStart <= today && b.periodEnd >= today) ??
+      [...vacations].sort((a, b) => (a.periodStart < b.periodStart ? 1 : -1))[0];
     return {
       id: u.id,
       name: u.name,
@@ -91,6 +103,22 @@ export interface CreateUserInput {
   title?: string;
 }
 
+/** Validates that a managerId points at an active supervisor in the same company. */
+async function assertValidManager(
+  companyId: string,
+  managerId: string | null | undefined,
+): Promise<void> {
+  if (!managerId) return;
+  const manager = await prisma.user.findFirst({
+    where: { id: managerId, companyId, status: "ACTIVE" },
+    select: { role: true },
+  });
+  if (!manager) throw new LeaveError("The selected manager does not exist in this company.");
+  if (!isSupervisorRole(manager.role)) {
+    throw new LeaveError("Only managers and higher roles can be selected as a responsable.");
+  }
+}
+
 export async function createUserForAdmin(user: SessionUser, input: CreateUserInput) {
   requireHr(user);
   const email = input.email.trim().toLowerCase();
@@ -110,29 +138,37 @@ export async function createUserForAdmin(user: SessionUser, input: CreateUserInp
   }
   const existing = await prisma.user.findFirst({ where: { companyId: user.companyId, email } });
   if (existing) throw new LeaveError("A user with this email already exists.");
+  await assertValidManager(user.companyId!, input.managerId);
 
   const passwordHash = await bcrypt.hash(input.password, 10);
-  const created = await prisma.user.create({
-    data: {
-      companyId: user.companyId!,
-      email,
-      name: input.name.trim(),
-      role: input.role,
-      employmentType: (input.employmentType as "FULL_TIME" | "PART_TIME" | "CONTRACTOR") ?? "FULL_TIME",
-      employmentStartDate: input.employmentStartDate,
-      departmentId: input.departmentId,
-      managerId: input.managerId || null,
-      title: input.title?.trim() || null,
-      passwordHash,
-    },
-  });
-  await audit(prisma, {
-    companyId: user.companyId!,
-    actorId: user.id,
-    action: "user.create",
-    entityType: "User",
-    entityId: created.id,
-    after: { email, role: input.role, departmentId: input.departmentId },
+  const created = await prisma.$transaction(async (tx) => {
+    const createdUser = await tx.user.create({
+      data: {
+        companyId: user.companyId!,
+        email,
+        name: input.name.trim(),
+        role: input.role,
+        employmentType: (input.employmentType as "FULL_TIME" | "PART_TIME" | "CONTRACTOR") ?? "FULL_TIME",
+        employmentStartDate: input.employmentStartDate,
+        departmentId: input.departmentId,
+        managerId: input.managerId || null,
+        title: input.title?.trim() || null,
+        passwordHash,
+      },
+    });
+    // L8: seed the current leave-year balance immediately using the accrual
+    // engine's own math, so a new user's balance is correct from day one.
+    const company = await tx.company.findUniqueOrThrow({ where: { id: createdUser.companyId } });
+    await seedBalancesForNewUser(tx, company, createdUser);
+    await audit(tx, {
+      companyId: createdUser.companyId,
+      actorId: user.id,
+      action: "user.create",
+      entityType: "User",
+      entityId: createdUser.id,
+      after: { email, role: input.role, departmentId: input.departmentId },
+    });
+    return createdUser;
   });
   return created;
 }
@@ -157,6 +193,7 @@ export async function updateUserForAdmin(user: SessionUser, userId: string, inpu
     throw new LeaveError("You cannot deactivate your own account.");
   }
   if (input.managerId === userId) throw new LeaveError("A user cannot be their own manager.");
+  await assertValidManager(user.companyId!, input.managerId);
   if (input.role && input.role !== target.role && !canGrantRole(user, input.role)) {
     throw new LeaveError(
       input.role === "ADMIN" || input.role === "SUPER_ADMIN"
@@ -203,6 +240,76 @@ export async function updateUserForAdmin(user: SessionUser, userId: string, inpu
     },
   });
   return updated;
+}
+
+/**
+ * True, permanent, cascading hard deletion (irreversible). The user's *own*
+ * rows are deleted: leave requests (+ days + approval steps + attachments),
+ * leave balances, notifications, delegations they own, attachments they
+ * uploaded, iCal integrations. Records *owned by other people* that merely
+ * reference this user are reference-cleaned, never deleted — a colleague's
+ * request that this user approved or decided keeps its approval history
+ * (`approvedById`, `cancelledById`, `effectiveApproverId`, approval steps
+ * nulled), reports keep their record with `managerId` cleared, and audit logs
+ * keep the company history with `actorId` nulled. Attachment blobs are purged
+ * from storage best-effort (a storage failure never blocks the deletion).
+ * Guarded like a role change: only SUPER_ADMIN may delete privileged users,
+ * and nobody can delete their own account.
+ */
+export async function deleteUserForAdmin(user: SessionUser, userId: string) {
+  requireHr(user);
+  const target = await prisma.user.findFirst({
+    where: { id: userId, companyId: user.companyId },
+  });
+  if (!target) throw new LeaveError("User not found.");
+  if (target.id === user.id) throw new LeaveError("You cannot delete your own account.");
+  if ((target.role === "ADMIN" || target.role === "SUPER_ADMIN") && user.role !== "SUPER_ADMIN") {
+    throw new LeaveError("Only a SUPER_ADMIN can delete privileged users.");
+  }
+
+  const attachmentKeys = (
+    await prisma.attachment.findMany({ where: { uploaderId: userId }, select: { storageKey: true } })
+  ).map((a: { storageKey: string }) => a.storageKey);
+
+  await prisma.$transaction(async (tx) => {
+    // Reference cleanup on records owned by *other* users — clear, don't delete.
+    await tx.user.updateMany({ where: { managerId: userId }, data: { managerId: null } });
+    await tx.leaveRequest.updateMany({ where: { approvedById: userId }, data: { approvedById: null } });
+    await tx.leaveRequest.updateMany({ where: { cancelledById: userId }, data: { cancelledById: null } });
+    await tx.leaveRequest.updateMany({ where: { delegateToId: userId }, data: { delegateToId: null } });
+    await tx.leaveRequest.updateMany({ where: { effectiveApproverId: userId }, data: { effectiveApproverId: null } });
+    await tx.approvalStep.updateMany({ where: { approverId: userId }, data: { approverId: null } });
+    await tx.approvalDelegation.updateMany({ where: { delegateId: userId }, data: { delegateId: null } });
+    await tx.approvalRule.updateMany({ where: { specificUserId: userId }, data: { specificUserId: null } });
+    await tx.approvalRule.updateMany({ where: { delegateToUserId: userId }, data: { delegateToUserId: null } });
+    await tx.integration.updateMany({ where: { userId }, data: { userId: null } });
+    await tx.auditLog.updateMany({ where: { actorId: userId }, data: { actorId: null } });
+
+    await audit(tx, {
+      companyId: user.companyId!,
+      actorId: user.id,
+      action: "user.delete",
+      entityType: "User",
+      entityId: userId,
+      before: { name: target.name, email: target.email, role: target.role, status: target.status },
+      after: { deleted: true },
+    });
+
+    // Cascades the user's own rows (balances, notifications, requests + days +
+    // steps, attachments uploaded, delegations owned).
+    await tx.user.delete({ where: { id: userId } });
+  });
+
+  // Best-effort blob purge for the deleted user's attachments.
+  for (const key of attachmentKeys) {
+    try {
+      await deleteObject(key);
+    } catch {
+      // Storage failure must never roll back the deletion.
+    }
+  }
+
+  return { ok: true as const };
 }
 
 /* ------------------------------ Departments ------------------------------ */
@@ -272,14 +379,52 @@ export async function renameDepartmentForAdmin(user: SessionUser, departmentId: 
   return updated;
 }
 
+/**
+ * Permanently deletes a department — only when nothing references it. Any
+ * members, department-specific policies, approval rules or child departments
+ * block the deletion with a clear message so nothing is orphaned.
+ */
+export async function deleteDepartmentForAdmin(user: SessionUser, departmentId: string) {
+  requireHr(user);
+  const target = await prisma.department.findFirst({
+    where: { id: departmentId, companyId: user.companyId },
+  });
+  if (!target) throw new LeaveError("Department not found.");
+  const [members, policies, rules, children] = await Promise.all([
+    prisma.user.count({ where: { departmentId, companyId: user.companyId } }),
+    prisma.leavePolicy.count({ where: { departmentId, companyId: user.companyId } }),
+    prisma.approvalRule.count({ where: { departmentId, companyId: user.companyId } }),
+    prisma.department.count({ where: { parentId: departmentId } }),
+  ]);
+  if (members > 0 || policies > 0 || rules > 0 || children > 0) {
+    throw new LeaveError(
+      "This department is still in use — move its members and policies before deleting it.",
+    );
+  }
+  await prisma.$transaction(async (tx) => {
+    await tx.department.delete({ where: { id: departmentId } });
+    await audit(tx, {
+      companyId: user.companyId!,
+      actorId: user.id,
+      action: "department.delete",
+      entityType: "Department",
+      entityId: departmentId,
+      before: { name: target.name, code: target.code },
+    });
+  });
+}
+
 /* ------------------------- Leave types & policies ------------------------ */
 
-export async function listLeaveTypesForAdmin(user: SessionUser) {
+export async function listLeaveTypesForAdmin(user: SessionUser, opts: { showArchived?: boolean } = {}) {
   requireHr(user);
   return prisma.leaveType.findMany({
-    where: { companyId: user.companyId },
-    include: { policies: true },
-    orderBy: { sortOrder: "asc" },
+    where: { companyId: user.companyId, ...(opts.showArchived ? {} : { isArchived: false }) },
+    include: {
+      policies: true,
+      _count: { select: { requests: true, balances: true } },
+    },
+    orderBy: [{ isArchived: "asc" }, { sortOrder: "asc" }],
   });
 }
 
@@ -371,6 +516,7 @@ export async function updatePolicyForAdmin(user: SessionUser, policyId: string, 
   const before = {
     annualAllotment: policy.annualAllotment,
     carryOverDays: policy.carryOverDays,
+    carryOverExpiresOn: policy.carryOverExpiresOn,
     negativeAllowed: policy.negativeAllowed,
     probationDays: policy.probationDays,
   };
@@ -400,11 +546,97 @@ export async function updatePolicyForAdmin(user: SessionUser, policyId: string, 
     after: {
       annualAllotment: updated.annualAllotment,
       carryOverDays: updated.carryOverDays,
+      carryOverExpiresOn: updated.carryOverExpiresOn,
       negativeAllowed: updated.negativeAllowed,
       probationDays: updated.probationDays,
     },
   });
   return updated;
+}
+
+/* ----------------------------- Leave-type lifecycle ----------------------- */
+
+async function leaveTypeForAdmin(user: SessionUser, leaveTypeId: string) {
+  const target = await prisma.leaveType.findFirst({
+    where: { id: leaveTypeId, companyId: user.companyId },
+  });
+  if (!target) throw new LeaveError("Leave type not found.");
+  return target;
+}
+
+/** Hide a leave type from new requests and active policy config; history intact. */
+export async function archiveLeaveTypeForAdmin(user: SessionUser, leaveTypeId: string) {
+  requireHr(user);
+  const target = await leaveTypeForAdmin(user, leaveTypeId);
+  if (target.isArchived) return target;
+  const updated = await prisma.leaveType.update({
+    where: { id: leaveTypeId },
+    data: { isArchived: true },
+  });
+  await audit(prisma, {
+    companyId: user.companyId!,
+    actorId: user.id,
+    action: "leaveType.archive",
+    entityType: "LeaveType",
+    entityId: leaveTypeId,
+    before: { isArchived: false },
+    after: { isArchived: true },
+  });
+  return updated;
+}
+
+/** Bring an archived leave type back into active use. */
+export async function reactivateLeaveTypeForAdmin(user: SessionUser, leaveTypeId: string) {
+  requireHr(user);
+  const target = await leaveTypeForAdmin(user, leaveTypeId);
+  if (!target.isArchived) return target;
+  const updated = await prisma.leaveType.update({
+    where: { id: leaveTypeId },
+    data: { isArchived: false },
+  });
+  await audit(prisma, {
+    companyId: user.companyId!,
+    actorId: user.id,
+    action: "leaveType.reactivate",
+    entityType: "LeaveType",
+    entityId: leaveTypeId,
+    before: { isArchived: true },
+    after: { isArchived: false },
+  });
+  return updated;
+}
+
+/**
+ * Permanently deletes a leave type — only when it has never been used.
+ * Any history (requests, balances) blocks deletion; those must be archived.
+ */
+export async function deleteLeaveTypeForAdmin(user: SessionUser, leaveTypeId: string) {
+  requireHr(user);
+  const target = await leaveTypeForAdmin(user, leaveTypeId);
+  const [requests, balances] = await Promise.all([
+    prisma.leaveRequest.count({ where: { leaveTypeId } }),
+    prisma.leaveBalance.count({ where: { leaveTypeId } }),
+  ]);
+  if (requests > 0 || balances > 0) {
+    throw new LeaveError(
+      "Can't permanently delete a leave type that's been used — archive it instead.",
+    );
+  }
+  await prisma.$transaction(async (tx) => {
+    await tx.approvalRule.updateMany({
+      where: { companyId: user.companyId, leaveTypeId },
+      data: { leaveTypeId: null },
+    });
+    await tx.leaveType.delete({ where: { id: leaveTypeId } });
+    await audit(tx, {
+      companyId: user.companyId!,
+      actorId: user.id,
+      action: "leaveType.delete",
+      entityType: "LeaveType",
+      entityId: leaveTypeId,
+      before: { name: target.name },
+    });
+  });
 }
 
 /* -------------------------------- Balances ------------------------------- */
@@ -429,6 +661,7 @@ export async function listBalancesForAdmin(
   opts: { userId?: string; leaveTypeId?: string } = {},
 ): Promise<BalanceRow[]> {
   requireHr(user);
+  await syncCurrentAccruals(prisma, user.companyId!);
   const rows = await prisma.leaveBalance.findMany({
     where: {
       companyId: user.companyId,
@@ -528,6 +761,39 @@ export async function adjustBalanceForAdmin(
     before: { adjustment: balance.adjustment },
     after: { adjustment: updated.adjustment },
     metadata: { delta: input.delta, reason: input.reason },
+  });
+  return updated;
+}
+
+/* ------------------------------- Settings -------------------------------- */
+
+export async function updateCompanySettingsForAdmin(
+  user: SessionUser,
+  input: { countWeekendsWithinSpan: boolean; extendWeekendAfterFriday: boolean },
+) {
+  requireHr(user);
+  const before = await prisma.company.findUniqueOrThrow({
+    where: { id: user.companyId! },
+    select: { countWeekendsWithinSpan: true, extendWeekendAfterFriday: true },
+  });
+  const updated = await prisma.company.update({
+    where: { id: user.companyId! },
+    data: {
+      countWeekendsWithinSpan: input.countWeekendsWithinSpan,
+      extendWeekendAfterFriday: input.extendWeekendAfterFriday,
+    },
+  });
+  await audit(prisma, {
+    companyId: user.companyId!,
+    actorId: user.id,
+    action: "company.settings.update",
+    entityType: "Company",
+    entityId: user.companyId!,
+    before,
+    after: {
+      countWeekendsWithinSpan: updated.countWeekendsWithinSpan,
+      extendWeekendAfterFriday: updated.extendWeekendAfterFriday,
+    },
   });
   return updated;
 }

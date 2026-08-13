@@ -24,13 +24,13 @@ import { useServerError } from "@/lib/client-error";
 export type DelegationWithPeople = {
   id: string;
   userId: string;
-  delegateId: string;
+  delegateId: string | null;
   startsOn: string | null;
   endsOn: string | null;
   active: boolean;
   createdAt: Date;
   user: { id: string; name: string; email: string };
-  delegate: { id: string; name: string; email: string };
+  delegate: { id: string; name: string; email: string } | null;
 };
 
 export type DelegationCandidate = {
@@ -114,10 +114,11 @@ function DelegationRow({
     {},
   );
   const active = isActive(delegation);
-  const who = viewAsOwner ? delegation.delegate : delegation.user;
   const byLine = viewAsOwner
-    ? t("coversYourApprovals", { name: who.name })
-    : t("youCover", { name: who.name });
+    ? delegation.delegate
+      ? t("coversYourApprovals", { name: delegation.delegate.name })
+      : t("coversYourApprovalsDeleted")
+    : t("youCover", { name: delegation.user.name });
   const span =
     delegation.startsOn && delegation.endsOn
       ? `${delegation.startsOn} → ${delegation.endsOn}`

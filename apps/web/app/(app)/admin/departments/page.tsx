@@ -3,7 +3,7 @@ import { getTranslations } from "next-intl/server";
 import { requireRole } from "@/lib/session";
 import { listDepartmentsForAdmin } from "@/lib/services/admin";
 import { Badge, Card, CardContent, CardHeader, CardTitle } from "@timeoff/ui";
-import { CreateDepartmentDialog, RenameDepartmentDialog } from "@/components/admin/department-forms";
+import { CreateDepartmentDialog, RenameDepartmentDialog, DeleteDepartmentDialog } from "@/components/admin/department-forms";
 
 export async function generateMetadata(): Promise<Metadata> {
   const t = await getTranslations("metadata");
@@ -41,6 +41,7 @@ export default async function AdminDepartmentsPage() {
                     {t("personCount", { count: d.users })}
                   </p>
                   <RenameDepartmentDialog id={d.id} name={d.name} />
+                  <DeleteDepartmentDialog id={d.id} name={d.name} />
                 </div>
               </li>
             ))}

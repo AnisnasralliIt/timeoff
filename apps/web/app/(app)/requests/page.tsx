@@ -46,6 +46,8 @@ export default async function RequestsPage() {
     orderBy: { createdAt: "desc" },
   });
 
+  const company = await prisma.company.findUniqueOrThrow({ where: { id: user.companyId! } });
+
   return (
     <div className="space-y-6">
       <div className="flex flex-wrap items-end justify-between gap-4">
@@ -69,7 +71,7 @@ export default async function RequestsPage() {
         <EmptyState
           icon={<Inbox className="size-6" />}
           title={t("emptyTitle")}
-          description={t("emptyDescription")}
+          description={t(company.countWeekendsWithinSpan || company.extendWeekendAfterFriday ? "emptyDescriptionWeekends" : "emptyDescription")}
           action={
             <Button asChild>
               <Link href="/requests/new">{t("requestLeave")}</Link>

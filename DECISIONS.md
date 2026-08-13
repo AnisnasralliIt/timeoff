@@ -30,6 +30,7 @@ Status legend: ✅ decided & implemented · 🚧 decided, not yet built · ⚠�
 | L4 | **Carry-over is per-policy config with an explicit default of 10 days** (vacation). When a request is planned into a leave year with no balance row yet, the engine rolls over `min(policy.carryOverDays, max(0, prior-year available))` — no cascading. Carried days expire per the policy's `carryOverExpiresOn` MM-DD; a request that would consume carried days must end on or before that deadline. | ✅ | `carryOverDeadline()` in `@timeoff/domain`; engine in `resolveBalanceForDate`/create; admin validates MM-DD. Stage 5. |
 | L5 | **Negative balance default = disabled**; `maxNegative` exists per policy for HR opt-in. | ✅ | `LeavePolicy.negativeAllowed`/`maxNegative`; enforced in the Stage 3 request engine — over-balance requests are rejected unless the policy allows a bounded negative. |
 | L6 | **Probation**: per-policy rule (e.g. "no paid leave in first N days"). | ✅ | `LeavePolicy.probationDays`; enforced in the request engine for paid leave (`startDate < hire + probationDays` → rejected). Default `0` = off; seed gives Vacation a 30-day window (no seeded user is inside it). |
+| L7 | **Weekend counting is a company-wide opt-in** (`Company.countWeekendsInLeaveDuration`, default off). Off = weekends inside a leave span are free (L3). On = weekends inside a requested range count as leave days; company holidays still free. The rule flows through the single shared span function `computeLeaveDays` (server engine, client preview, overlap), so it can never drift between screens. Existing requests keep their stored `totalDays` — the change is **not retroactive**. | ✅ | `CalendarOptions.countWeekends` in `@timeoff/domain`; threaded through `createLeaveRequest`, the request-form preview, and `spansOverlap`; admin toggle on `/admin/settings`; Vitest-covered. Stage 8. |
 
 ## Permissions & approvals
 
@@ -309,3 +310,24 @@ and `LeaveRequest.currentApprovalLevel` (level of the last completed step).
   being department-only even with a foreign-department filter, company-wide
   exports covering both departments, and a real xlsx (zip magic) produced by
   the builder.
+
+## Stage 8 notes (weekend counting, login cleanup)
+
+- **Weekend counting (L7)**: `CalendarOptions.countWeekends` added to
+  `@timeoff/domain` — `isWorkingDay`/`listBusinessDays`/`countBusinessDays`
+  keep their default (weekends + holidays excluded), but with `countWeekends`
+  only holidays are excluded. `computeLeaveDays`, `spanDayMap` and
+  `spansOverlap` all pick the option up, so **one shared function** drives the
+  server engine (`createLeaveRequest`), the client request-form preview, and
+  overlap detection. Stored `totalDays` on existing requests is never
+  recomputed — flipping the toggle affects only new requests (non-retroactive).
+  Admin toggles it on `/admin/settings` (new tab, audited `company.settings.update`).
+  The `/requests/new` subtitle adapts to the setting.
+- **Login cleanup**: removed the seeded-demo hint (email/password prefill,
+  "Demo: any seeded user signs in with…" copy) from the login form and both
+  message catalogs; placeholders are generic. The dev seed, its README notes,
+  and the smoke-test fixtures still use the real seeded `password123` — those
+  are dev tooling, not product UI.
+- Verified: domain tests 34 → 39 (weekend-counting in business-days,
+  leave-days, and overlap); web typecheck clean; migration
+  `20260810112507_add_company_weekend_counting` applied.

@@ -29,6 +29,8 @@ interface RequestFormProps {
   balanceByType: Map<string, number>;
   holidayDates: Set<string>;
   employmentStartDate: string | null;
+  countWeekendsWithinSpan: boolean;
+  extendWeekendAfterFriday: boolean;
 }
 
 const DAY_PART_OPTIONS = ["FULL", "FIRST_HALF", "SECOND_HALF"] as const;
@@ -38,6 +40,8 @@ export function RequestForm({
   balanceByType,
   holidayDates,
   employmentStartDate,
+  countWeekendsWithinSpan,
+  extendWeekendAfterFriday,
 }: RequestFormProps) {
   const router = useRouter();
   const t = useTranslations("requestForm");
@@ -67,12 +71,19 @@ export function RequestForm({
           startDayPart: startDayPart as "FULL" | "FIRST_HALF" | "SECOND_HALF",
           endDayPart: endDayPart as "FULL" | "FIRST_HALF" | "SECOND_HALF",
         },
-        { holidays: holidayDates },
+        { holidays: holidayDates, countWeekendsWithinSpan, extendWeekendAfterFriday },
       );
     } catch {
       return null;
     }
-  }, [range, startDayPart, endDayPart, holidayDates]);
+  }, [range, startDayPart, endDayPart, holidayDates, countWeekendsWithinSpan, extendWeekendAfterFriday]);
+
+  // Toggle-2 clarity: when the Friday-extension applied, totalDays exceeds the
+  // actually-selected day count, so both numbers must be shown.
+  const selectedDayCount = preview
+    ? preview.days.reduce((sum, day) => sum + (day.dayPart === "FULL" ? 1 : 0.5), 0)
+    : 0;
+  const weekendExtended = Boolean(preview && preview.totalDays > selectedDayCount);
 
   React.useEffect(() => {
     if (state.requestId) {
@@ -199,14 +210,25 @@ export function RequestForm({
           <div className="flex items-center justify-between gap-4 border-t border-border pt-4">
             <div>
               {preview ? (
-                <p className="text-sm">
-                  <span className="font-display text-lg font-semibold text-foreground">
-                    {preview.totalDays}
-                  </span>{" "}
-                  <span className="text-muted-foreground">
-                    {t("workingDays", { count: preview.totalDays })}
-                  </span>
-                </p>
+                <div>
+                  <p className="text-sm">
+                    <span className="font-display text-lg font-semibold text-foreground">
+                      {preview.totalDays}
+                    </span>{" "}
+                    <span className="text-muted-foreground">
+                      {t("workingDays", { count: preview.totalDays })}
+                    </span>
+                  </p>
+                  {weekendExtended ? (
+                    <p className="mt-0.5 text-xs font-medium text-muted-foreground">
+                      {t("selectedDays", { count: selectedDayCount })} ·{" "}
+                      {t("deductedDays", { count: preview.totalDays })}{" "}
+                      <span className="text-foreground">
+                        {t("includesFollowingWeekend")}
+                      </span>
+                    </p>
+                  ) : null}
+                </div>
               ) : (
                 <p className="text-xs text-muted-foreground">
                   {t("pickDateRange")}

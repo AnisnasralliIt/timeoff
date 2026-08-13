@@ -55,7 +55,7 @@ interface ScopedLeaveRow {
   leaveType: { id: string; name: string; color: string };
   user: { id: string; name: string; department: { id: string; name: string } };
   approvedBy: { name: string } | null;
-  approvalSteps: { action: LeaveRequestStatus; createdAt: Date; approver: { name: string } }[];
+  approvalSteps: { action: LeaveRequestStatus; createdAt: Date; approver: { name: string } | null }[];
 }
 
 /**
@@ -193,7 +193,7 @@ function toExportRow(row: ScopedLeaveRow): ExportRow {
     totalDays: row.totalDays,
     status: row.status as RequestStatus,
     reason: row.reason,
-    approver: row.approvedBy?.name ?? decidedStep?.approver.name ?? null,
+    approver: row.approvedBy?.name ?? decidedStep?.approver?.name ?? null,
     decisionDate:
       row.status === "APPROVED"
         ? row.approvedAt

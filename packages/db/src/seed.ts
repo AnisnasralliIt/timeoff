@@ -6,7 +6,7 @@
  */
 import bcrypt from "bcryptjs";
 import { Prisma } from "@prisma/client";
-import { computeLeaveDays, addDaysISO, prorateAllotment, parseISO, type DayPart } from "@timeoff/domain";
+import { computeLeaveDays, addDaysISO, accruedVacationAsOf, cappedCarryOver, todayISO, parseISO, type DayPart } from "@timeoff/domain";
 import { prisma } from "./client";
 
 const COMPANY_NAME = "Acme GmbH";
@@ -14,7 +14,8 @@ const COMPANY_DOMAIN = "acme.dev";
 const DEV_PASSWORD = "password123";
 const LEAVE_YEAR_START = "2026-01-01";
 const LEAVE_YEAR_END = "2026-12-31";
-const ANNUAL_ALLOTMENT = 30;
+const ANNUAL_ALLOTMENT = 18;
+const CARRY_OVER_DAYS = 15;
 
 const HOLIDAYS: Record<string, Array<{ date: string; name: string }>> = {
   "2025": [
@@ -327,7 +328,7 @@ function genRequests(p: Person): RequestDraft[] {
     });
   }
 
-  return requests.filter((r) => r.startDate && r.endDate);
+  return requests.filter((r) => r.startDate && r.endDate && r.startDate >= p.startDate);
 }
 
 function computeTotalDays(req: RequestDraft): { totalDays: number; days: Array<{ date: string; dayPart: DayPart }> } {
@@ -444,7 +445,7 @@ async function main(): Promise<void> {
           name: policyName,
           leaveTypeId: leaveTypes.get(typeKey)!,
           annualAllotment: typeKey === "VACATION" ? ANNUAL_ALLOTMENT : 0,
-          carryOverDays: typeKey === "VACATION" ? 10 : 0,
+          carryOverDays: typeKey === "VACATION" ? CARRY_OVER_DAYS : 0,
           // Carried-over days are usable until the end of the leave year they
           // are granted into (L4); the engine enforces the configured MM-DD.
           carryOverExpiresOn: typeKey === "VACATION" ? "12-31" : null,
@@ -516,9 +517,23 @@ async function main(): Promise<void> {
       },
     });
 
-    // Track vacation usage in the 2026 leave year.
-    const vacationUsed = new Map<string, number>();
-    const vacationPending = new Map<string, number>();
+    // Track vacation usage per leave year (calendar year for fiscal month 1),
+    // so the previous year's row and the carried-over component are real.
+    const vacationUsedByYear = new Map<string, Map<string, number>>();
+    const vacationPendingByYear = new Map<string, Map<string, number>>();
+    const bumpDays = (
+      map: Map<string, Map<string, number>>,
+      year: string,
+      userId: string,
+      days: number,
+    ) => {
+      let inner = map.get(year);
+      if (!inner) {
+        inner = new Map();
+        map.set(year, inner);
+      }
+      inner.set(userId, (inner.get(userId) ?? 0) + days);
+    };
 
     for (const p of drafts) {
       for (const req of p.requests) {
@@ -558,10 +573,11 @@ async function main(): Promise<void> {
           });
         }
 
-        if (leaveTypeKey === "VACATION" && req.startDate >= LEAVE_YEAR_START) {
+        if (leaveTypeKey === "VACATION") {
           const key = userIds.get(p.email)!;
-          if (req.status === "APPROVED") vacationUsed.set(key, (vacationUsed.get(key) ?? 0) + totalDays);
-          if (req.status === "PENDING") vacationPending.set(key, (vacationPending.get(key) ?? 0) + totalDays);
+          const year = req.startDate.slice(0, 4);
+          if (req.status === "APPROVED") bumpDays(vacationUsedByYear, year, key, totalDays);
+          if (req.status === "PENDING") bumpDays(vacationPendingByYear, year, key, totalDays);
         }
 
         if (req.status === "PENDING" && approverId) {
@@ -593,13 +609,66 @@ async function main(): Promise<void> {
 
     for (const p of drafts) {
       const userId = userIds.get(p.email)!;
-      const accrued = prorateAllotment({
+
+      // Previous leave year (2025): only that year's accrual slice and the
+      // vacation actually taken that year. Carried-over/adjustments are 0 by
+      // design.
+      const used25 =
+        (vacationUsedByYear.get("2025")?.get(userId) ?? 0) +
+        (vacationPendingByYear.get("2025")?.get(userId) ?? 0);
+      const cumulativeThrough2025 = accruedVacationAsOf({
         annualAllotment: ANNUAL_ALLOTMENT,
         employmentStartDate: p.startDate,
-        periodStart: LEAVE_YEAR_START,
-        periodEnd: LEAVE_YEAR_END,
+        asOf: "2025-12-31",
       });
-      const carriedOver = pick([0, 0, 0, 3, 5, 5, 8, 10]);
+      const accrued25 = Math.max(
+        0,
+        Math.round(
+          (cumulativeThrough2025 -
+            accruedVacationAsOf({
+              annualAllotment: ANNUAL_ALLOTMENT,
+              employmentStartDate: p.startDate,
+              asOf: "2024-12-31",
+            })) *
+            100,
+        ) / 100,
+      );
+      // What actually rolls into 2026: the TOTAL eligible unused history
+      // (everything ever earned minus everything ever taken) capped by the
+      // policy — matching the runtime engine, which applies the cap to the
+      // whole unused history rather than to a single year.
+      const carriedOver26 = cappedCarryOver(
+        CARRY_OVER_DAYS,
+        Math.max(0, Math.round((cumulativeThrough2025 - used25) * 100) / 100),
+      );
+      await tx.leaveBalance.create({
+        data: {
+          companyId: company.id,
+          userId,
+          leaveTypeId: leaveTypes.get("VACATION")!,
+          periodStart: "2025-01-01",
+          periodEnd: "2025-12-31",
+          accrued: accrued25,
+          carriedOver: 0,
+          adjustment: 0,
+          used: used25,
+          pending: 0,
+        },
+      });
+
+      // Current leave year (2026): only this year's accrual slice so far.
+      const accrued = Math.max(
+        0,
+        Math.round(
+          (accruedVacationAsOf({
+            annualAllotment: ANNUAL_ALLOTMENT,
+            employmentStartDate: p.startDate,
+            asOf: todayISO(),
+          }) -
+            cumulativeThrough2025) *
+            100,
+        ) / 100,
+      );
       await tx.leaveBalance.create({
         data: {
           companyId: company.id,
@@ -608,10 +677,10 @@ async function main(): Promise<void> {
           periodStart: LEAVE_YEAR_START,
           periodEnd: LEAVE_YEAR_END,
           accrued,
-          carriedOver,
+          carriedOver: carriedOver26,
           adjustment: p.email === "julia.hoffmann@acme.dev" ? 2 : 0,
-          used: vacationUsed.get(userId) ?? 0,
-          pending: vacationPending.get(userId) ?? 0,
+          used: vacationUsedByYear.get("2026")?.get(userId) ?? 0,
+          pending: vacationPendingByYear.get("2026")?.get(userId) ?? 0,
         },
       });
     }

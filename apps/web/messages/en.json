@@ -13,6 +13,7 @@
     "adminDepartments": "Admin · Departments",
     "adminLeaveTypes": "Admin · Leave types & policies",
     "adminBalances": "Admin · Balances",
+    "adminSettings": "Admin · Settings",
     "login": "Sign in"
   },
   "nav": {
@@ -62,8 +63,7 @@
     "signingIn": "Signing in…",
     "signIn": "Sign in",
     "or": "or",
-    "continueGoogle": "Continue with Google",
-    "demo": "Demo: any seeded user signs in with {password}"
+    "continueGoogle": "Continue with Google"
   },
   "roles": {
     "EMPLOYEE": "Employee",
@@ -141,6 +141,7 @@
     "requestLeave": "Request leave",
     "emptyTitle": "No requests yet",
     "emptyDescription": "Book your first days off — weekends and holidays are on the house.",
+    "emptyDescriptionWeekends": "Book your first days off — weekends count as leave days, so start small.",
     "rejected": "Rejected: {reason}"
   },
   "requestDetail": {
@@ -159,6 +160,7 @@
     "waitingFirstApproval": "Waiting for the first approval decision.",
     "waitingFirstApprovalInitial": "Waiting for the first approval.",
     "levelStep": "Level {level} · {action}",
+    "approverDeleted": "Approver (deleted)",
     "approved": "Approved",
     "rejected": "Rejected",
     "attachments": "Attachments",
@@ -169,7 +171,8 @@
   },
   "newRequest": {
     "title": "Request leave",
-    "subtitle": "Weekends and company holidays are free. Half days count as 0.5 days."
+    "subtitle": "Weekends and company holidays are free. Half days count as 0.5 days.",
+    "subtitleWeekends": "Weekends inside your requested range count as leave days. Company holidays stay free. Half days count as 0.5 days."
   },
   "requestForm": {
     "title": "New request",
@@ -187,6 +190,9 @@
     "attachmentOptionalHint": "Optional — e.g. a medical certificate.",
     "workingDays": "{count, plural, =0 {working days} one {working day} other {working days}}",
     "pickDateRange": "Pick a date range to see the working days.",
+    "selectedDays": "{count, plural, one {# day selected} other {# days selected}}",
+    "deductedDays": "{count, plural, one {# day will be deducted} other {# days will be deducted}}",
+    "includesFollowingWeekend": "(includes the following weekend per company policy)",
     "submitting": "Submitting…",
     "submitRequest": "Submit request"
   },
@@ -308,7 +314,8 @@
       "users": "Users",
       "departments": "Departments",
       "leaveTypes": "Leave types & policies",
-      "balances": "Balances"
+      "balances": "Balances",
+      "settings": "Settings"
     },
     "ariaSections": "Admin sections"
   },
@@ -340,13 +347,47 @@
     "attachment": "attachment: {value}",
     "required": "required",
     "notRequired": "not required",
-    "auto": "auto"
+    "auto": "auto",
+    "archived": "archived",
+    "showArchived": "Show archived",
+    "showActive": "Show active",
+    "noArchivedTypes": "No archived leave types.",
+    "archiveTrigger": "Archive",
+    "archiveTitle": "Archive {name}?",
+    "archiveDescription": "It will be hidden from new requests, but all existing history stays intact and you can reactivate it anytime.",
+    "archiveConfirm": "Archive",
+    "reactivateTrigger": "Reactivate",
+    "deleteTrigger": "Permanently delete",
+    "deleteTitle": "Permanently delete {name}?",
+    "deleteDescription": "This cannot be undone.",
+    "deleteConfirm": "Delete permanently",
+    "deleteDisabledHint": "Can't permanently delete a type that's been used — archive it instead.",
+    "moreActions": "More actions",
+    "noTypes": "No leave types yet.",
+    "noPolicies": "No policies for this leave type."
   },
   "adminBalances": {
     "count": "{count, plural, one {# balance row} other {# balance rows}}{selected, select, true { for the selected person.} other {.}}",
     "title": "Leave balances",
     "rowCount": "{count, plural, one {# row} other {# rows}}",
     "leaveYearOption": "{year} leave year"
+  },
+  "adminSettings": {
+    "title": "Company settings",
+    "description": "Leave-duration rules that apply company-wide.",
+    "countWeekendsLabel": "Count weekends in leave duration",
+    "countWeekendsHint": "When enabled, weekends inside a requested range count as leave days; only company holidays stay free. Existing requests keep their stored day counts.",
+    "extendWeekendLabel": "Extend Friday-ending requests through the weekend",
+    "extendWeekendHint": "When enabled, a request that ends on a Friday also deducts the following Saturday and Sunday, even though only weekdays were selected. This never prepends a weekend before a Monday start.",
+    "calculatorTitle": "Weekend rule calculator",
+    "calculatorDescription": "Preview how many days would be deducted for any range under the current saved settings — before anyone submits a real request.",
+    "calculatorStart": "Start date",
+    "calculatorEnd": "End date",
+    "calculatorResult": "{count, plural, =0 {# days} one {# day} other {# days}} deducted",
+    "calculatorSelected": "{count, plural, one {# day selected} other {# days selected}}",
+    "calculatorIncludesWeekend": "includes the following weekend per company policy",
+    "calculatorInvalid": "Pick a valid date range.",
+    "calculatorPickRange": "Pick a start and end date to preview the deduction."
   },
   "delegation": {
     "title": "Approval delegation",
@@ -357,6 +398,7 @@
     "whileActive": "While active, that person approves requests instead of you — useful for vacations and sick days.",
     "create": "Create delegation",
     "coversYourApprovals": "{name} covers your approvals",
+    "coversYourApprovalsDeleted": "Your delegate no longer exists",
     "youCover": "You cover {name}''s approvals",
     "from": "from {date}",
     "until": "until {date}",
@@ -463,7 +505,22 @@
       "create": "Create department",
       "creating": "Creating…",
       "renameTrigger": "Rename",
-      "renameTitle": "Rename department"
+      "renameTitle": "Rename department",
+      "deleteTrigger": "Delete",
+      "deleteTitle": "Delete {name}?",
+      "deleteDescription": "Only possible when no members, policies or approval rules reference it. Move members to another department first.",
+      "deleteConfirm": "Delete department",
+      "deleting": "Deleting…"
+    },
+    "deleteUser": {
+      "trigger": "Delete",
+      "title": "Permanently delete {name}?",
+      "description": "This will permanently delete {name} and all of their leave requests and balances. This cannot be undone.",
+      "typeName": "Type {name} to confirm:",
+      "typeHint": "The delete button stays disabled until the name matches exactly.",
+      "confirm": "Permanently delete",
+      "deleting": "Deleting…",
+      "selfHint": "You cannot delete your own account."
     },
     "leaveType": {
       "createTrigger": "Add leave type",
@@ -567,6 +624,9 @@
     "emailExists": "A user with this email already exists.",
     "userNotFound": "User not found.",
     "cannotDeactivateSelf": "You cannot deactivate your own account.",
+    "userRemoveSelf": "You cannot delete your own account.",
+    "onlySuperAdminRemovePrivileged": "Only a SUPER_ADMIN can delete privileged users.",
+    "departmentInUse": "This department is still in use — move its members and policies before deleting it.",
     "cannotBeOwnManager": "A user cannot be their own manager.",
     "onlySuperAdminChangePrivileged": "Only a SUPER_ADMIN can change privileged roles.",
     "departmentNameRequired": "Department name is required.",

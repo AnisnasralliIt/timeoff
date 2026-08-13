@@ -63,12 +63,27 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
       return token;
     },
     session: async ({ session, token }) => {
-      if (session.user) {
-        session.user.id = token.sub ?? "";
-        session.user.role = token.role as Role | undefined;
-        session.user.companyId = token.companyId as string | undefined;
-        session.user.departmentId = token.departmentId as string | undefined;
+      if (!session.user || !token.sub) return session;
+      // Single source of truth: the DB, not the JWT. The token is minted at
+      // login and only refreshed on an explicit "update" trigger, so after a
+      // DB reset/re-seed (which recreates the company and users with new ids)
+      // a stale cookie would otherwise surface a deleted user or a companyId
+      // that no longer exists. Resolving here means `session.user.companyId`
+      // is always the account's current company, so guards like
+      // syncCurrentAccruals(prisma, user.companyId!) never hit a ghost id.
+      const dbUser = await prisma.user.findUnique({ where: { id: token.sub } });
+      if (!dbUser) {
+        // The account no longer exists (e.g. tenant was re-seeded): present as
+        // signed-out so route guards redirect to /login instead of crashing.
+        session.user.id = "";
+        return session;
       }
+      session.user.id = dbUser.id;
+      session.user.email = dbUser.email;
+      session.user.name = dbUser.name;
+      session.user.role = dbUser.role as Role | undefined;
+      session.user.companyId = dbUser.companyId as string | undefined;
+      session.user.departmentId = dbUser.departmentId as string | undefined;
       return session;
     },
   },

@@ -4,7 +4,7 @@
  * of the span may be half days, which halves the day's cost.
  */
 import { assertValidRange, eachDay, isValidISODate } from "./dates";
-import { countBusinessDays, isWorkingDay, type CalendarOptions } from "./business-days";
+import { countBusinessDays, isFridayISO, isWorkingDay, type CalendarOptions } from "./business-days";
 
 export type DayPart = "FULL" | "FIRST_HALF" | "SECOND_HALF";
 
@@ -43,6 +43,11 @@ function assertDayPart(value: DayPart | undefined, label: string): void {
  * number of days consumed. Day parts apply to the first and last working days
  * of the span; interior working days are full days.
  *
+ * `extendWeekendAfterFriday` adds the two days of the weekend following a
+ * Friday-ending span to `totalDays` only — the `days` list is never extended,
+ * so displayed ranges always reflect exactly what was selected while the
+ * balance deduction (and anything reading `totalDays`) sees the extended cost.
+ *
  * @throws LeaveSpanError when the span is invalid or contains no working days.
  */
 export function computeLeaveDays(span: LeaveSpan, options: CalendarOptions = {}): ComputedLeave {
@@ -70,25 +75,30 @@ export function computeLeaveDays(span: LeaveSpan, options: CalendarOptions = {})
   const startIsHalf = startPart !== "FULL";
   const endIsHalf = endPart !== "FULL";
 
+  let days: ComputedLeaveDay[];
   if (working.length === 1) {
     if (startIsHalf && endIsHalf && startPart !== endPart) {
       throw new LeaveSpanError("A single working day cannot be split into two half days");
     }
     const singlePart: DayPart = startIsHalf ? startPart : endPart;
-    return {
-      days: [{ date: working[0]!, dayPart: singlePart }],
-      totalDays: dayPartToDays(singlePart),
-    };
+    days = [{ date: working[0]!, dayPart: singlePart }];
+  } else {
+    days = working.map((date, index) => {
+      let dayPart: DayPart = "FULL";
+      if (index === 0) dayPart = startPart;
+      if (index === working.length - 1) dayPart = endPart;
+      return { date, dayPart };
+    });
   }
 
-  const days: ComputedLeaveDay[] = working.map((date, index) => {
-    let dayPart: DayPart = "FULL";
-    if (index === 0) dayPart = startPart;
-    if (index === working.length - 1) dayPart = endPart;
-    return { date, dayPart };
-  });
-
-  const totalDays = days.reduce((sum, day) => sum + dayPartToDays(day.dayPart), 0);
+  let totalDays = days.reduce((sum, day) => sum + dayPartToDays(day.dayPart), 0);
+  // Toggle 2: a Friday-ending span pulls in the following weekend. Applied on
+  // top of the selected days, so a multi-week span that already counted an
+  // interior weekend never double-counts it (only the weekend after the last
+  // day is ever added).
+  if (options.extendWeekendAfterFriday && isFridayISO(endDate)) {
+    totalDays += 2;
+  }
   return { days, totalDays };
 }
 

@@ -18,6 +18,22 @@ export const INSIGHT_ROLES: ReadonlySet<Role> = new Set(["EXECUTIVE", "HR", "ADM
 /** Roles that can approve/reject leave requests. */
 export const APPROVER_ROLES: ReadonlySet<Role> = new Set(["MANAGER", "HR", "ADMIN", "SUPER_ADMIN"]);
 
+/**
+ * Roles that may be assigned as someone's manager/responsable. Ordinary
+ * employees cannot supervise anyone.
+ */
+export const SUPERVISOR_ROLES: ReadonlySet<Role> = new Set([
+  "MANAGER",
+  "HR",
+  "ADMIN",
+  "SUPER_ADMIN",
+  "EXECUTIVE",
+]);
+
+export function isSupervisorRole(role: Role | string | null | undefined): boolean {
+  return SUPERVISOR_ROLES.has((role ?? "EMPLOYEE") as Role);
+}
+
 export function canManageUsers(user: SessionUser): boolean {
   return PEOPLE_OPS_ROLES.has(user.role ?? "EMPLOYEE");
 }

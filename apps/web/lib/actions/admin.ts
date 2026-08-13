@@ -5,19 +5,33 @@ import { requireAuth } from "@/lib/session";
 import {
   createUserForAdmin,
   updateUserForAdmin,
+  deleteUserForAdmin,
   createDepartmentForAdmin,
   renameDepartmentForAdmin,
+  deleteDepartmentForAdmin,
   createLeaveTypeForAdmin,
   updatePolicyForAdmin,
+  archiveLeaveTypeForAdmin,
+  reactivateLeaveTypeForAdmin,
+  deleteLeaveTypeForAdmin,
   adjustBalanceForAdmin,
+  updateCompanySettingsForAdmin,
 } from "@/lib/services/admin";
 import { toErrorState, type ServerErrorShape } from "@/lib/errors";
 
 export interface ActionState extends ServerErrorShape {
   ok?: boolean;
+  saved?: { countWeekendsWithinSpan: boolean; extendWeekendAfterFriday: boolean };
 }
 
-const ADMIN_PATHS = ["/admin", "/admin/users", "/admin/departments", "/admin/leave-types", "/admin/balances"];
+const ADMIN_PATHS = [
+  "/admin",
+  "/admin/users",
+  "/admin/departments",
+  "/admin/leave-types",
+  "/admin/balances",
+  "/admin/settings",
+];
 
 function revalidateAdmin() {
   for (const path of ADMIN_PATHS) revalidatePath(path);
@@ -79,6 +93,21 @@ export async function updateUserAction(
   }
 }
 
+export async function deleteUserAction(
+  userId: string,
+  _prev: ActionState,
+  _formData: FormData,
+): Promise<ActionState> {
+  const user = await requireAuth();
+  try {
+    await deleteUserForAdmin(user, userId);
+    revalidateAdmin();
+    return { ok: true };
+  } catch (error) {
+    return toErrorState(error);
+  }
+}
+
 export async function createDepartmentAction(_prev: ActionState, formData: FormData): Promise<ActionState> {
   const user = await requireAuth();
   try {
@@ -102,6 +131,21 @@ export async function renameDepartmentAction(
   const user = await requireAuth();
   try {
     await renameDepartmentForAdmin(user, departmentId, String(formData.get("name") ?? ""));
+    revalidateAdmin();
+    return { ok: true };
+  } catch (error) {
+    return toErrorState(error);
+  }
+}
+
+export async function removeDepartmentAction(
+  departmentId: string,
+  _prev: ActionState,
+  _formData: FormData,
+): Promise<ActionState> {
+  const user = await requireAuth();
+  try {
+    await deleteDepartmentForAdmin(user, departmentId);
     revalidateAdmin();
     return { ok: true };
   } catch (error) {
@@ -167,6 +211,67 @@ export async function adjustBalanceAction(_prev: ActionState, formData: FormData
     });
     revalidateAdmin();
     return { ok: true };
+  } catch (error) {
+    return toErrorState(error);
+  }
+}
+
+export async function archiveLeaveTypeAction(
+  leaveTypeId: string,
+  _prev: ActionState,
+  _formData: FormData,
+): Promise<ActionState> {
+  const user = await requireAuth();
+  try {
+    await archiveLeaveTypeForAdmin(user, leaveTypeId);
+    revalidateAdmin();
+    return { ok: true };
+  } catch (error) {
+    return toErrorState(error);
+  }
+}
+
+export async function reactivateLeaveTypeAction(
+  leaveTypeId: string,
+  _prev: ActionState,
+  _formData: FormData,
+): Promise<ActionState> {
+  const user = await requireAuth();
+  try {
+    await reactivateLeaveTypeForAdmin(user, leaveTypeId);
+    revalidateAdmin();
+    return { ok: true };
+  } catch (error) {
+    return toErrorState(error);
+  }
+}
+
+export async function deleteLeaveTypeAction(
+  leaveTypeId: string,
+  _prev: ActionState,
+  _formData: FormData,
+): Promise<ActionState> {
+  const user = await requireAuth();
+  try {
+    await deleteLeaveTypeForAdmin(user, leaveTypeId);
+    revalidateAdmin();
+    return { ok: true };
+  } catch (error) {
+    return toErrorState(error);
+  }
+}
+
+export async function updateCompanySettingsAction(
+  _prev: ActionState,
+  formData: FormData,
+): Promise<ActionState> {
+  const user = await requireAuth();
+  const countWeekendsWithinSpan = formData.get("countWeekendsWithinSpan") === "on";
+  const extendWeekendAfterFriday = formData.get("extendWeekendAfterFriday") === "on";
+  try {
+    await updateCompanySettingsForAdmin(user, { countWeekendsWithinSpan, extendWeekendAfterFriday });
+    revalidateAdmin();
+    return { ok: true, saved: { countWeekendsWithinSpan, extendWeekendAfterFriday } };
   } catch (error) {
     return toErrorState(error);
   }

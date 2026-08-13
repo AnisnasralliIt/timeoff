@@ -5,7 +5,7 @@ import { getTranslations } from "next-intl/server";
 import { prisma } from "@timeoff/db";
 import { availableBalance, todayISO } from "@timeoff/domain";
 import { requireAuth } from "@/lib/session";
-import { listPendingForApproval } from "@/lib/services/leave";
+import { listPendingForApproval, syncCurrentAccruals } from "@/lib/services/leave";
 import { Badge, BalanceRing, Button, Card, CardContent, CardDescription, CardHeader, CardTitle, statusVariant, type BadgeProps } from "@timeoff/ui";
 
 export async function generateMetadata(): Promise<Metadata> {
@@ -34,11 +34,17 @@ export default async function DashboardPage() {
   const tCommon = await getTranslations("common");
 
   const [balances, recent, upcoming] = await Promise.all([
-    prisma.leaveBalance.findMany({
-      where: { userId: user.id, periodStart: { lte: today }, periodEnd: { gte: today } },
-      include: { leaveType: true },
-      orderBy: { periodStart: "desc" },
-    }),
+    (async () => {
+      // Same reconciliation the admin views use: current-year `accrued` keeps
+      // growing month over month and `carriedOver` reflects the corrected
+      // previous-year leftover, so the dashboard never shows a stale number.
+      await syncCurrentAccruals(prisma, user.companyId!);
+      return prisma.leaveBalance.findMany({
+        where: { userId: user.id, periodStart: { lte: today }, periodEnd: { gte: today } },
+        include: { leaveType: true },
+        orderBy: { periodStart: "desc" },
+      });
+    })(),
     prisma.leaveRequest.findMany({
       where: { userId: user.id },
       include: { leaveType: true },

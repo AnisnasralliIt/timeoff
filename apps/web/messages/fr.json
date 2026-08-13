@@ -13,6 +13,7 @@
     "adminDepartments": "Administration · Départements",
     "adminLeaveTypes": "Administration · Types de congé et politiques",
     "adminBalances": "Administration · Soldes",
+    "adminSettings": "Administration · Paramètres",
     "login": "Connexion"
   },
   "nav": {
@@ -62,8 +63,7 @@
     "signingIn": "Connexion…",
     "signIn": "Se connecter",
     "or": "ou",
-    "continueGoogle": "Continuer avec Google",
-    "demo": "Démo : n''importe quel utilisateur pré-rempli se connecte avec {password}"
+    "continueGoogle": "Continuer avec Google"
   },
   "roles": {
     "EMPLOYEE": "Employé(e)",
@@ -141,6 +141,7 @@
     "requestLeave": "Demander un congé",
     "emptyTitle": "Aucune demande",
     "emptyDescription": "Réservez vos premiers jours de congé — week-ends et jours fériés sont offerts.",
+    "emptyDescriptionWeekends": "Réservez vos premiers jours de congé — les week-ends comptent comme des jours de congé, commencez petit.",
     "rejected": "Refusé : {reason}"
   },
   "requestDetail": {
@@ -159,6 +160,7 @@
     "waitingFirstApproval": "En attente de la décision de première approbation.",
     "waitingFirstApprovalInitial": "En attente de la première approbation.",
     "levelStep": "Niveau {level} · {action}",
+    "approverDeleted": "Approbateur (supprimé)",
     "approved": "Approuvé",
     "rejected": "Refusé",
     "attachments": "Pièces jointes",
@@ -169,7 +171,8 @@
   },
   "newRequest": {
     "title": "Demander un congé",
-    "subtitle": "Les week-ends et les jours fériés de l''entreprise sont gratuits. Les demi-journées comptent pour 0,5 jour."
+    "subtitle": "Les week-ends et les jours fériés de l''entreprise sont gratuits. Les demi-journées comptent pour 0,5 jour.",
+    "subtitleWeekends": "Les week-ends inclus dans la période demandée comptent comme des jours de congé. Les jours fériés de l''entreprise restent gratuits. Les demi-journées comptent pour 0,5 jour."
   },
   "requestForm": {
     "title": "Nouvelle demande",
@@ -187,6 +190,9 @@
     "attachmentOptionalHint": "Facultatif — p. ex. un certificat médical.",
     "workingDays": "{count, plural, one {jour ouvré} other {jours ouvrés}}",
     "pickDateRange": "Choisissez une plage de dates pour voir les jours ouvrés.",
+    "selectedDays": "{count, plural, one {# jour sélectionné} other {# jours sélectionnés}}",
+    "deductedDays": "{count, plural, one {# jour sera déduit} other {# jours seront déduits}}",
+    "includesFollowingWeekend": "(inclut le week-end suivant selon la politique de l''entreprise)",
     "submitting": "Envoi…",
     "submitRequest": "Envoyer la demande"
   },
@@ -308,7 +314,8 @@
       "users": "Utilisateurs",
       "departments": "Départements",
       "leaveTypes": "Types de congé et politiques",
-      "balances": "Soldes"
+      "balances": "Soldes",
+      "settings": "Paramètres"
     },
     "ariaSections": "Sections d''administration"
   },
@@ -340,13 +347,47 @@
     "attachment": "pièce jointe : {value}",
     "required": "requise",
     "notRequired": "non requise",
-    "auto": "auto"
+    "auto": "auto",
+    "archived": "archivé",
+    "showArchived": "Afficher les types archivés",
+    "showActive": "Afficher les types actifs",
+    "noArchivedTypes": "Aucun type de congé archivé.",
+    "archiveTrigger": "Archiver",
+    "archiveTitle": "Archiver {name} ?",
+    "archiveDescription": "Le type sera masqué des nouvelles demandes, mais tout l''historique existant reste intact et vous pouvez le réactiver à tout moment.",
+    "archiveConfirm": "Archiver",
+    "reactivateTrigger": "Réactiver",
+    "deleteTrigger": "Supprimer définitivement",
+    "deleteTitle": "Supprimer définitivement {name} ?",
+    "deleteDescription": "Cette action est irréversible.",
+    "deleteConfirm": "Supprimer définitivement",
+    "deleteDisabledHint": "Impossible de supprimer définitivement un type déjà utilisé — archivez-le à la place.",
+    "moreActions": "Plus d''actions",
+    "noTypes": "Aucun type de congé pour le moment.",
+    "noPolicies": "Aucune politique pour ce type de congé."
   },
   "adminBalances": {
     "count": "{count, plural, one {# ligne de solde} other {# lignes de solde}}{selected, select, true { pour la personne sélectionnée.} other {.}}",
     "title": "Soldes de congés",
     "rowCount": "{count, plural, one {# ligne} other {# lignes}}",
     "leaveYearOption": "Année de congés {year}"
+  },
+  "adminSettings": {
+    "title": "Paramètres de l''entreprise",
+    "description": "Règles de durée des congés applicables à toute l''entreprise.",
+    "countWeekendsLabel": "Compter les week-ends dans la durée des congés",
+    "countWeekendsHint": "Lorsque cette option est activée, les week-ends inclus dans la période demandée comptent comme des jours de congé ; seuls les jours fériés de l''entreprise restent gratuits. Les demandes existantes conservent leur nombre de jours enregistré.",
+    "extendWeekendLabel": "Étendre les demandes se terminant un vendredi au week-end",
+    "extendWeekendHint": "Lorsque cette option est activée, une demande se terminant un vendredi déduit également le samedi et le dimanche suivants, même si seuls les jours ouvrés ont été sélectionnés. Un week-end n''est jamais ajouté avant un début de semaine le lundi.",
+    "calculatorTitle": "Calculateur des règles de week-end",
+    "calculatorDescription": "Aperçu du nombre de jours déduits pour n''importe quelle période selon les paramètres enregistrés — avant qu''une vraie demande ne soit soumise.",
+    "calculatorStart": "Date de début",
+    "calculatorEnd": "Date de fin",
+    "calculatorResult": "{count, plural, one {# jour déduit} other {# jours déduits}}",
+    "calculatorSelected": "{count, plural, one {# jour sélectionné} other {# jours sélectionnés}}",
+    "calculatorIncludesWeekend": "inclut le week-end suivant selon la politique de l''entreprise",
+    "calculatorInvalid": "Choisissez une plage de dates valide.",
+    "calculatorPickRange": "Choisissez une date de début et de fin pour prévisualiser la déduction."
   },
   "delegation": {
     "title": "Délégation d''approbation",
@@ -357,6 +398,7 @@
     "whileActive": "Pendant la période d''activité, cette personne approuve les demandes à votre place — utile pendant les vacances et les arrêts maladie.",
     "create": "Créer la délégation",
     "coversYourApprovals": "{name} couvre vos approbations",
+    "coversYourApprovalsDeleted": "Votre délégué n''existe plus",
     "youCover": "Vous couvrez les approbations de {name}",
     "from": "à partir du {date}",
     "until": "jusqu''au {date}",
@@ -463,7 +505,22 @@
       "create": "Créer le département",
       "creating": "Création…",
       "renameTrigger": "Renommer",
-      "renameTitle": "Renommer le département"
+      "renameTitle": "Renommer le département",
+      "deleteTrigger": "Supprimer",
+      "deleteTitle": "Supprimer {name} ?",
+      "deleteDescription": "Possible uniquement si aucun membre, politique ou règle d''approbation n''y fait référence. Déplacez d''abord les membres vers un autre département.",
+      "deleteConfirm": "Supprimer le département",
+      "deleting": "Suppression…"
+    },
+    "deleteUser": {
+      "trigger": "Supprimer",
+      "title": "Supprimer définitivement {name} ?",
+      "description": "Cela supprimera définitivement {name} ainsi que toutes ses demandes et soldes de congés. Cette action est irréversible.",
+      "typeName": "Saisissez {name} pour confirmer :",
+      "typeHint": "Le bouton de suppression reste désactivé tant que le nom ne correspond pas exactement.",
+      "confirm": "Supprimer définitivement",
+      "deleting": "Suppression…",
+      "selfHint": "Vous ne pouvez pas supprimer votre propre compte."
     },
     "leaveType": {
       "createTrigger": "Ajouter un type de congé",
@@ -567,6 +624,9 @@
     "emailExists": "Un utilisateur avec cet e-mail existe déjà.",
     "userNotFound": "Utilisateur introuvable.",
     "cannotDeactivateSelf": "Vous ne pouvez pas désactiver votre propre compte.",
+    "userRemoveSelf": "Vous ne pouvez pas supprimer votre propre compte.",
+    "onlySuperAdminRemovePrivileged": "Seul un SUPER_ADMIN peut supprimer des utilisateurs privilégiés.",
+    "departmentInUse": "Ce département est encore utilisé — déplacez ses membres et ses politiques avant de le supprimer.",
     "cannotBeOwnManager": "Un utilisateur ne peut pas être son propre responsable.",
     "onlySuperAdminChangePrivileged": "Seul un SUPER_ADMIN peut modifier les rôles privilégiés.",
     "departmentNameRequired": "Le nom du département est requis.",

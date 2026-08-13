@@ -202,7 +202,7 @@ export default async function RequestDetailPage({ params }: { params: Promise<{ 
                       })}
                     </p>
                     <p className="text-xs text-muted-foreground">
-                      {step.approver.name} · {formatDate(step.createdAt)}
+                      {step.approver?.name ?? t("approverDeleted")} · {formatDate(step.createdAt)}
                       {step.comment ? ` · “${step.comment}”` : ""}
                     </p>
                   </div>

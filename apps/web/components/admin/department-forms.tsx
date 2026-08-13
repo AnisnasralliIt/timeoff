@@ -3,9 +3,9 @@
 import { useActionState, useState } from "react";
 import { useFormStatus } from "react-dom";
 import { useTranslations } from "next-intl";
-import { Building2, Pencil } from "lucide-react";
+import { Building2, Pencil, Trash2 } from "lucide-react";
 import { Button, Field, Input, Dialog, DialogTrigger, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter, DialogClose } from "@timeoff/ui";
-import { createDepartmentAction, renameDepartmentAction } from "@/lib/actions/admin";
+import { createDepartmentAction, renameDepartmentAction, removeDepartmentAction } from "@/lib/actions/admin";
 import { useServerError } from "@/lib/client-error";
 
 function SubmitButton({ label, pendingLabel }: { label: string; pendingLabel: string }) {
@@ -95,6 +95,44 @@ export function RenameDepartmentDialog({ id, name }: { id: string; name: string 
               </Button>
             </DialogClose>
             <SubmitButton label={tCommon("save")} pendingLabel={tCommon("saving")} />
+          </DialogFooter>
+        </form>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+export function DeleteDepartmentDialog({ id, name }: { id: string; name: string }) {
+  const t = useTranslations("adminDialogs.department");
+  const tCommon = useTranslations("common");
+  const translateError = useServerError();
+  const [state, formAction] = useActionState(removeDepartmentAction.bind(null, id), {});
+  return (
+    <Dialog>
+      <DialogTrigger asChild>
+        <Button variant="ghost" size="sm">
+          <Trash2 className="size-3.5" />
+          {t("deleteTrigger")}
+        </Button>
+      </DialogTrigger>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>{t("deleteTitle", { name })}</DialogTitle>
+          <DialogDescription>{t("deleteDescription")}</DialogDescription>
+        </DialogHeader>
+        <form action={formAction} className="space-y-4">
+          {translateError(state) ? (
+            <p role="alert" className="text-xs font-medium text-destructive">
+              {translateError(state)}
+            </p>
+          ) : null}
+          <DialogFooter>
+            <DialogClose asChild>
+              <Button variant="ghost" type="button">
+                {tCommon("cancel")}
+              </Button>
+            </DialogClose>
+            <SubmitButton label={t("deleteConfirm")} pendingLabel={t("deleting")} />
           </DialogFooter>
         </form>
       </DialogContent>

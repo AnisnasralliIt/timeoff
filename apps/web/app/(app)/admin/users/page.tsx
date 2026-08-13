@@ -6,7 +6,9 @@ import { listUsersForAdmin } from "@/lib/services/admin";
 import { Badge, Card, CardContent, CardHeader, CardTitle } from "@timeoff/ui";
 import { CreateUserDialog } from "@/components/admin/create-user-form";
 import { EditUserDialog } from "@/components/admin/edit-user-form";
+import { DeleteUserDialog } from "@/components/admin/delete-user-dialog";
 import { roleBadgeVariant } from "@/components/admin/user-badges";
+import { SUPERVISOR_ROLES } from "@/lib/permissions";
 
 export async function generateMetadata(): Promise<Metadata> {
   const t = await getTranslations("metadata");
@@ -40,7 +42,7 @@ export default async function AdminUsersPage() {
       orderBy: { sortOrder: "asc" },
     }),
     prisma.user.findMany({
-      where: { companyId: user.companyId, status: "ACTIVE" },
+      where: { companyId: user.companyId, status: "ACTIVE", role: { in: [...SUPERVISOR_ROLES] } },
       select: { id: true, name: true },
       orderBy: { name: "asc" },
     }),
@@ -91,6 +93,7 @@ export default async function AdminUsersPage() {
                     managers={managers}
                     canGrantAdmin={canGrantAdmin}
                   />
+                  <DeleteUserDialog userId={u.id} name={u.name} isSelf={u.id === user.id} />
                 </div>
               </li>
             ))}

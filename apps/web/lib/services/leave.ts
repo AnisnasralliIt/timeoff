@@ -1,13 +1,15 @@
 import { prisma, Prisma, type DayPart, type LeaveRequestStatus } from "@timeoff/db";
 import {
+  accruedVacationAsOf,
   addDaysISO,
   availableBalance,
+  cappedCarryOver,
   computeLeaveDays,
   isValidISODate,
   LeaveSpanError,
   leaveYearRange,
-  prorateAllotment,
   spansOverlap,
+  todayISO,
   carryOverDeadline,
 } from "@timeoff/domain";
 import type { SessionUser } from "@/lib/session";
@@ -140,10 +142,290 @@ async function currentBalance(
   });
 }
 
+type CurrentBalanceRow = NonNullable<Awaited<ReturnType<typeof currentBalance>>>;
+
+/** LeavePolicy subset with the fields the accrual engine needs. */
+type AccrualPolicy = {
+  id: string;
+  leaveTypeId: string;
+  departmentId: string | null;
+  countryCode: string | null;
+  annualAllotment: number;
+  carryOverDays: number;
+};
+
+/**
+ * The effective accrual policy for a user/leave type (same matching as
+ * `getPolicy`): a department-specific row wins over the company-wide one,
+ * and the country-code scope must match (null = all countries).
+ */
+function effectivePolicyFor(
+  policies: AccrualPolicy[],
+  departmentId: string,
+  countryCode: string,
+  leaveTypeId: string,
+): AccrualPolicy | null {
+  const matches = policies.filter(
+    (p) =>
+      p.leaveTypeId === leaveTypeId &&
+      (p.departmentId === null || p.departmentId === departmentId) &&
+      (p.countryCode === null || p.countryCode === countryCode),
+  );
+  return (
+    matches.find((p) => p.departmentId === departmentId) ??
+    matches.find((p) => p.departmentId === null) ??
+    null
+  );
+}
+
+/** The leave year a date falls in: `{ startYear, start, end }` (day 1 of the fiscal month). */
+function currentLeaveYear(fiscal: number, onDate: string): { startYear: number; start: string; end: string } {
+  const year = Number(onDate.slice(0, 4));
+  const month = Number(onDate.slice(5, 7));
+  const startYear = fiscal > 1 && month < fiscal ? year - 1 : year;
+  const { start, end } = leaveYearRange(fiscal, startYear);
+  return { startYear, start, end };
+}
+
+function round2(value: number): number {
+  return Math.round(value * 100) / 100;
+}
+
+/** Days a user consumed against a specific leave year (APPROVED + PENDING),
+ *  matching how the app attributes usage: by the request's start date. */
+async function vacationUsedInRange(
+  db: Db,
+  userId: string,
+  leaveTypeId: string,
+  range: { start: string; end: string },
+): Promise<number> {
+  const rows = await db.leaveRequest.findMany({
+    where: {
+      userId,
+      leaveTypeId,
+      status: { in: ["APPROVED", "PENDING"] },
+      startDate: { gte: range.start, lte: range.end },
+    },
+    select: { totalDays: true },
+  });
+  return round2(rows.reduce((sum, r) => sum + r.totalDays, 0));
+}
+
+/**
+ * The accrual attributable to a single leave-year period, i.e. the cumulative
+ * engine's value as of `asOf` minus its value as of the day before the period
+ * started. Rows therefore hold only their own year's slice (e.g. 12 days for
+ * 2026 through August), while the cumulative engine still drives the numbers
+ * under the hood. Floored at 0 so a row reconciled before its period ever
+ * begins never goes negative.
+ */
+function perYearAccrued(options: {
+  annualAllotment: number;
+  employmentStartDate: string;
+  fullTimeRatio: number;
+  periodStart: string;
+  periodEnd: string;
+  asOf: string;
+}): number {
+  const asOf = options.asOf < options.periodEnd ? options.asOf : options.periodEnd;
+  const cumulative = accruedVacationAsOf({
+    annualAllotment: options.annualAllotment,
+    employmentStartDate: options.employmentStartDate,
+    asOf,
+    fullTimeRatio: options.fullTimeRatio,
+  });
+  const prior = accruedVacationAsOf({
+    annualAllotment: options.annualAllotment,
+    employmentStartDate: options.employmentStartDate,
+    asOf: addDaysISO(options.periodStart, -1),
+    fullTimeRatio: options.fullTimeRatio,
+  });
+  return Math.max(0, round2(cumulative - prior));
+}
+
+/**
+ * How many days carry into the leave year starting at `targetYearStart`, capped
+ * at the policy limit (L4).
+ *
+ * The cap applies to the employee's TOTAL eligible unused historical vacation,
+ * not just the immediately preceding year: everything earned through the end of
+ * the last complete year before the target year (the cumulative engine never
+ * resets), plus all historical balance adjustments, minus everything committed
+ * to vacation. For example, 10 unused from 2024 plus 12 unused from 2025 carry
+ * min(22, limit) into 2026; an employee hired in 2010 who has never taken leave
+ * carries min(lifetime, limit), never the whole lifetime total.
+ *
+ * Earned = `accruedVacationAsOf` as of the prior year's end. Usage = the
+ * employee's committed APPROVED/PENDING vacation across the whole history (the
+ * app's single source of truth for what was taken, regardless of whether a
+ * balance row exists for every single year). Historical rows contribute their
+ * `adjustment` grants/takes; their stored `carriedOver` is deliberately
+ * excluded — it is the surplus of even earlier years, so adding it would
+ * double-count.
+ *
+ * `cappedCarryOver` clamps the result to `[0, carryOverDays]`. Never returns
+ * null: a year with no prior history simply carries 0 (a new employee or a
+ * brand-new company has nothing to roll over), and carry explicitly disabled
+ * (`carryOverDays <= 0`) is 0.
+ */
+async function carryOverFor(
+  db: Db,
+  company: { id: string; fiscalYearStartMonth: number },
+  user: { id: string; employmentStartDate: string; employmentType: string },
+  leaveTypeId: string,
+  policy: { annualAllotment: number; carryOverDays: number },
+  targetYearStart: string,
+): Promise<number> {
+  if (policy.carryOverDays <= 0) return 0;
+  const targetStartYear = Number(targetYearStart.slice(0, 4));
+  const priorRange = leaveYearRange(company.fiscalYearStartMonth, targetStartYear - 1);
+  const ratio = user.employmentType === "PART_TIME" ? 0.5 : 1;
+
+  // Everything the employee could ever have drawn on through the end of the
+  // last complete leave year before the target year.
+  const earnedThroughPriorYear = accruedVacationAsOf({
+    annualAllotment: policy.annualAllotment,
+    employmentStartDate: user.employmentStartDate,
+    asOf: priorRange.end,
+    fullTimeRatio: ratio,
+  });
+
+  // Historical yearly records strictly before the target year. Their
+  // `adjustment` grants/takes days; `carriedOver` is deliberately excluded (the
+  // surplus of even earlier years — adding it would double-count).
+  const historical = await db.leaveBalance.findMany({
+    where: { userId: user.id, leaveTypeId, periodEnd: { lte: priorRange.end } },
+    orderBy: { periodStart: "asc" },
+  });
+  const totalAdjustments = round2(historical.reduce((sum, r) => sum + r.adjustment, 0));
+
+  // Usage is the employee's committed APPROVED/PENDING vacation across the
+  // whole history — the app's single source of truth for what was taken.
+  const totalUsed = await vacationUsedInRange(db, user.id, leaveTypeId, {
+    start: user.employmentStartDate,
+    end: priorRange.end,
+  });
+
+  const totalUnused = Math.max(0, round2(earnedThroughPriorYear + totalAdjustments - totalUsed));
+  return round2(cappedCarryOver(policy.carryOverDays, totalUnused));
+}
+
+/**
+ * Brings one balance row in line with the per-year accrual model:
+ *  - `accrued` is recomputed as the current row's own year slice (`perYearAccrued`)
+ *    as of `min(today, periodEnd)` so a past year is frozen at its year-end value
+ *    while the current year keeps growing;
+ *  - `carriedOver` is recomputed for the current (and any future) year's row
+ *    from the employee's total eligible unused history capped at the policy
+ *    limit — so the displayed component always reflects real historical data and
+ *    reacts to policy-limit changes. Historical rows (periodStart before the
+ *    current year) keep their stored value.
+ * Manual adjustment, used and pending are never touched. Idempotent: returns
+ * the row unchanged when nothing differs.
+ */
+async function reconcileBalanceRow(
+  db: Db,
+  company: { id: string; fiscalYearStartMonth: number },
+  user: { employmentStartDate: string; employmentType: string },
+  policy: { annualAllotment: number; carryOverDays: number },
+  row: CurrentBalanceRow,
+) {
+  const today = todayISO();
+  const ratio = user.employmentType === "PART_TIME" ? 0.5 : 1;
+  const asOf = row.periodEnd < today ? row.periodEnd : today;
+  const freshAccrued = perYearAccrued({
+    annualAllotment: policy.annualAllotment,
+    employmentStartDate: user.employmentStartDate,
+    fullTimeRatio: ratio,
+    periodStart: row.periodStart,
+    periodEnd: row.periodEnd,
+    asOf,
+  });
+  const current = currentLeaveYear(company.fiscalYearStartMonth, today);
+  let freshCarriedOver = row.carriedOver;
+  if (row.periodStart >= current.start) {
+    freshCarriedOver = await carryOverFor(
+      db,
+      company,
+      { ...user, id: row.userId },
+      row.leaveTypeId,
+      policy,
+      row.periodStart,
+    );
+  }
+  const data: { accrued?: number; carriedOver?: number } = {};
+  if (freshAccrued !== row.accrued) data.accrued = freshAccrued;
+  if (freshCarriedOver !== row.carriedOver) data.carriedOver = freshCarriedOver;
+  if (data.accrued === undefined && data.carriedOver === undefined) return row;
+  return db.leaveBalance.update({ where: { id: row.id }, data });
+}
+
+/**
+ * Reconciles every ACTIVE user's current and immediately-preceding leave-year
+ * balance rows to the per-year accrual as of today (the "current calculation
+ * date"), so the displayed balance keeps growing month over month within the
+ * current year and the carried-over component reflects the total eligible
+ * unused history. Only `accrued` and `carriedOver` are touched — adjustment,
+ * used and pending are preserved. Idempotent: rows already correct are left
+ * alone.
+ */
+export async function syncCurrentAccruals(db: Db, companyId: string): Promise<void> {
+  const company = await db.company.findUniqueOrThrow({
+    where: { id: companyId },
+    select: { id: true, fiscalYearStartMonth: true },
+  });
+  const today = todayISO();
+  const current = currentLeaveYear(company.fiscalYearStartMonth, today);
+  const priorStart = leaveYearRange(company.fiscalYearStartMonth, current.startYear - 1).start;
+  const rows = await db.leaveBalance.findMany({
+    where: {
+      companyId,
+      periodStart: { lte: today },
+      periodEnd: { gte: priorStart },
+      user: { status: "ACTIVE" },
+    },
+    include: {
+      user: {
+        select: { employmentStartDate: true, employmentType: true, departmentId: true, countryCode: true },
+      },
+    },
+  });
+  if (rows.length === 0) return;
+
+  const policies = await db.leavePolicy.findMany({
+    where: { companyId, annualAllotment: { gt: 0 } },
+    select: {
+      id: true,
+      leaveTypeId: true,
+      departmentId: true,
+      countryCode: true,
+      annualAllotment: true,
+      carryOverDays: true,
+    },
+  });
+
+  for (const row of rows) {
+    const policy = effectivePolicyFor(
+      policies,
+      row.user.departmentId,
+      row.user.countryCode,
+      row.leaveTypeId,
+    );
+    if (!policy) continue;
+    await reconcileBalanceRow(
+      db,
+      company,
+      { employmentStartDate: row.user.employmentStartDate, employmentType: row.user.employmentType },
+      policy,
+      row,
+    );
+  }
+}
+
 type BalanceResolution =
   | {
       existing: true;
-      row: NonNullable<Awaited<ReturnType<typeof currentBalance>>>;
+      row: CurrentBalanceRow;
       available: number;
     }
   | {
@@ -158,11 +440,13 @@ type BalanceResolution =
  * annual allotment (prorated for the hire date / part-time contract) without
  * persisting until the request itself succeeds.
  *
- * Carry-over: when planning a *new* leave year that directly follows an
- * existing row, up to `carryOverDays` of the previous year's leftover is rolled
- * into the plan (L4). Days are carried at most once — never cascading.
+ * Carry-over: when planning a *new* leave year, up to `carryOverDays` of the
+ * employee's total eligible unused history is rolled into the plan (L4). Days
+ * are carried at most once — never cascading. Existing rows covering today are
+ * reconciled (accrued + carriedOver) by the same engine the display paths use,
+ * so what the employee sees equals what is enforced.
  */
-async function resolveBalanceForDate(
+export async function resolveBalanceForDate(
   db: Db,
   company: { id: string; fiscalYearStartMonth: number },
   user: { id: string; companyId: string; employmentStartDate: string; employmentType: string },
@@ -170,32 +454,37 @@ async function resolveBalanceForDate(
   policy: { annualAllotment: number; carryOverDays: number } | null,
   onDate: string,
 ): Promise<BalanceResolution | null> {
+  const today = todayISO();
+  const ratio = user.employmentType === "PART_TIME" ? 0.5 : 1;
   const existing = await currentBalance(db, user.id, leaveTypeId, onDate);
   if (existing) {
+    // Per-year accrual grows with the calendar and carry-over follows the total
+    // eligible unused history: whenever an existing row covers the current
+    // calculation date (today), reconcile it so the balance keeps accruing
+    // month over month and the carried-over component stays right — the same
+    // single engine the display paths use. Manual adjustment, used and
+    // pending are never touched.
+    if (policy && existing.periodStart <= today && existing.periodEnd >= today) {
+      const updated = await reconcileBalanceRow(db, company, user, policy, existing);
+      return { existing: true, row: updated, available: availableBalance(updated) };
+    }
     return { existing: true, row: existing, available: availableBalance(existing) };
   }
   if (!policy || policy.annualAllotment <= 0) return null;
 
-  const year = Number(onDate.slice(0, 4));
-  const month = Number(onDate.slice(5, 7));
-  const fiscal = company.fiscalYearStartMonth;
-  const startYear = fiscal > 1 && month < fiscal ? year - 1 : year;
-  const { start, end } = leaveYearRange(fiscal, startYear);
-  const ratio = user.employmentType === "PART_TIME" ? 0.5 : 1;
-  const accrued = prorateAllotment({
+  const { start, end } = currentLeaveYear(company.fiscalYearStartMonth, onDate);
+  const accrued = perYearAccrued({
     annualAllotment: policy.annualAllotment,
     employmentStartDate: user.employmentStartDate,
+    fullTimeRatio: ratio,
     periodStart: start,
     periodEnd: end,
-    fullTimeRatio: ratio,
+    asOf: today,
   });
 
   let carriedOver = 0;
   if (policy.carryOverDays > 0) {
-    const prior = await currentBalance(db, user.id, leaveTypeId, addDaysISO(start, -1));
-    if (prior) {
-      carriedOver = Math.min(policy.carryOverDays, Math.max(0, availableBalance(prior)));
-    }
+    carriedOver = await carryOverFor(db, company, user, leaveTypeId, policy, start);
   }
 
   return {
@@ -203,6 +492,92 @@ async function resolveBalanceForDate(
     plan: { periodStart: start, periodEnd: end, accrued, carriedOver },
     available: accrued + carriedOver,
   };
+}
+
+/**
+ * Materializes the current leave-year balance rows for a newly created user,
+ * using the exact same proration math as `resolveBalanceForDate` so a fresh
+ * account starts with a correct balance instead of an empty one (L8).
+ *
+ * Seeds every leave type whose effective policy grants a positive annual
+ * allotment; rows the user already has for the current year are left alone.
+ * Carried-over days are always 0 here (a brand-new user has no prior year),
+ * and `accrued` holds only the current year's slice (`perYearAccrued`).
+ * Non-retroactive by construction: only the new user's rows are created.
+ *
+ * Returns the number of balance rows created.
+ */
+export async function seedBalancesForNewUser(
+  db: Db,
+  company: { id: string; fiscalYearStartMonth: number },
+  user: {
+    id: string;
+    companyId: string;
+    departmentId: string;
+    countryCode: string;
+    employmentStartDate: string;
+    employmentType: string;
+  },
+): Promise<number> {
+  const today = new Date().toISOString().slice(0, 10);
+  const year = Number(today.slice(0, 4));
+  const month = Number(today.slice(5, 7));
+  const fiscal = company.fiscalYearStartMonth;
+  const startYear = fiscal > 1 && month < fiscal ? year - 1 : year;
+  const { start, end } = leaveYearRange(fiscal, startYear);
+
+  const policies = await db.leavePolicy.findMany({
+    where: { companyId: company.id, annualAllotment: { gt: 0 } },
+    select: {
+      id: true,
+      leaveTypeId: true,
+      departmentId: true,
+      countryCode: true,
+      annualAllotment: true,
+      carryOverDays: true,
+    },
+  });
+  // Department-specific policy wins over the company-wide one (getPolicy).
+  const effective = new Map<string, (typeof policies)[number]>();
+  for (const leaveTypeId of new Set(policies.map((p) => p.leaveTypeId))) {
+    const policy = effectivePolicyFor(policies, user.departmentId, user.countryCode, leaveTypeId);
+    if (policy) effective.set(leaveTypeId, policy);
+  }
+
+  const existing = await db.leaveBalance.findMany({
+    where: { userId: user.id, periodStart: start, periodEnd: end },
+    select: { leaveTypeId: true },
+  });
+  const existingTypes = new Set(existing.map((b) => b.leaveTypeId));
+
+  const ratio = user.employmentType === "PART_TIME" ? 0.5 : 1;
+  let created = 0;
+  for (const [leaveTypeId, policy] of effective) {
+    if (existingTypes.has(leaveTypeId)) continue;
+    await db.leaveBalance.create({
+      data: {
+        companyId: company.id,
+        userId: user.id,
+        leaveTypeId,
+        periodStart: start,
+        periodEnd: end,
+        accrued: perYearAccrued({
+          annualAllotment: policy.annualAllotment,
+          employmentStartDate: user.employmentStartDate,
+          fullTimeRatio: ratio,
+          periodStart: start,
+          periodEnd: end,
+          asOf: today,
+        }),
+        carriedOver: 0,
+        adjustment: 0,
+        used: 0,
+        pending: 0,
+      },
+    });
+    created += 1;
+  }
+  return created;
 }
 
 interface ApproverContext {
@@ -359,7 +734,11 @@ export async function createLeaveRequest(user: SessionUser, input: CreateLeaveIn
     );
     computed = computeLeaveDays(
       { startDate, endDate, startDayPart, endDayPart },
-      { holidays },
+      {
+        holidays,
+        countWeekendsWithinSpan: company.countWeekendsWithinSpan,
+        extendWeekendAfterFriday: company.extendWeekendAfterFriday,
+      },
     );
   } catch (error) {
     if (error instanceof LeaveSpanError) throw new LeaveError(error.message);
@@ -384,7 +763,7 @@ export async function createLeaveRequest(user: SessionUser, input: CreateLeaveIn
     const overlap = spansOverlap(
       { startDate, endDate, startDayPart, endDayPart },
       { startDate: other.startDate, endDate: other.endDate, startDayPart: other.startDayPart, endDayPart: other.endDayPart },
-      { holidays },
+      { holidays, countWeekendsWithinSpan: company.countWeekendsWithinSpan },
     );
     if (overlap.overlappingDays > 0) {
       throw new LeaveError("This overlaps a request you already submitted.");

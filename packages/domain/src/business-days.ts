@@ -2,16 +2,36 @@
  * Working-day calendar. A working day is any day that is neither a weekend
  * (Saturday/Sunday) nor a holiday. Holidays are supplied as a set of concrete
  * ISO dates; callers resolve recurring holidays before calling these helpers.
+ *
+ * When `countWeekendsWithinSpan` is enabled (company-wide leave-duration
+ * setting), weekends inside a span count as leave days — only holidays are
+ * excluded. `extendWeekendAfterFriday` adds the weekend after a Friday-ending
+ * span to the deduction total (see leave-days). Every consumer (span expansion,
+ * overlap, previews, exports) reads these options from this one module, so the
+ * company settings are always applied consistently.
  */
 import { assertValidRange, eachDay, isValidISODate, parseISO, toISO } from "./dates";
 
 export interface CalendarOptions {
   /** Concrete holiday dates, e.g. resolved from the Holiday table. */
   holidays?: ReadonlySet<string>;
+  /** Count weekends inside leave spans as leave days (default: false). */
+  countWeekendsWithinSpan?: boolean;
+  /**
+   * Add the following Saturday and Sunday to the deduction total when a span
+   * ends on a Friday (default: false). Only affects `totalDays` — the expanded
+   * `days` list is never extended, so displayed ranges stay as selected.
+   */
+  extendWeekendAfterFriday?: boolean;
 }
 
 export function isWeekendISO(value: string): boolean {
   return parseISO(value).getUTCDay() === 0 || parseISO(value).getUTCDay() === 6;
+}
+
+/** True when the ISO date falls on a Friday. */
+export function isFridayISO(value: string): boolean {
+  return parseISO(value).getUTCDay() === 5;
 }
 
 export function isHoliday(value: string, holidays: ReadonlySet<string>): boolean {
@@ -19,7 +39,7 @@ export function isHoliday(value: string, holidays: ReadonlySet<string>): boolean
 }
 
 export function isWorkingDay(value: string, options: CalendarOptions = {}): boolean {
-  if (isWeekendISO(value)) return false;
+  if (!options.countWeekendsWithinSpan && isWeekendISO(value)) return false;
   return options.holidays ? !isHoliday(value, options.holidays) : true;
 }
 

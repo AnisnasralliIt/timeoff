@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useTranslations } from "next-intl";
-import { Users, Building2, Briefcase, Wallet, Gauge } from "lucide-react";
+import { Users, Building2, Briefcase, Wallet, Gauge, Settings } from "lucide-react";
 import { cn } from "@timeoff/ui";
 
 const tabs = [
@@ -12,6 +12,7 @@ const tabs = [
   { href: "/admin/departments", key: "departments", icon: Building2 },
   { href: "/admin/leave-types", key: "leaveTypes", icon: Briefcase },
   { href: "/admin/balances", key: "balances", icon: Wallet },
+  { href: "/admin/settings", key: "settings", icon: Settings },
 ] as const;
 
 export function AdminTabs() {
