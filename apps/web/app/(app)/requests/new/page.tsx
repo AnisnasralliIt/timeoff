@@ -15,9 +15,9 @@ export default async function NewRequestPage() {
   const user = await requireAuth();
   const today = todayISO();
   const t = await getTranslations("newRequest");
-  // Reconcile the current-year balances (cumulative accrual + carry-over) so the
+  // Reconcile the current-user's balances (cumulative accrual + carry-over) so the
   // preview shows exactly what request validation will enforce.
-  await syncCurrentAccruals(prisma, user.companyId!);
+  await syncCurrentAccruals(prisma, user.companyId!, user.id);
 
   const [leaveTypes, holidays, dbUser, balances, company] = await Promise.all([
     prisma.leaveType.findMany({

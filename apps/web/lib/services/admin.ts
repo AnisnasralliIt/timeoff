@@ -60,10 +60,13 @@ export interface BalanceIssueRow {
  * Scoped to the actor's visible users; same source used by the admin overview and
  * the filtered balances page so the dashboard count always matches the results.
  */
-export async function balanceIssueRows(user: SessionUser): Promise<BalanceIssueRow[]> {
+export async function balanceIssueRows(
+  user: SessionUser,
+  opts: { skipSync?: boolean } = {},
+): Promise<BalanceIssueRow[]> {
   requireHr(user);
   const companyId = user.companyId!;
-  await syncCurrentAccruals(prisma, companyId);
+  if (!opts.skipSync) await syncCurrentAccruals(prisma, companyId);
   const today = new Date().toISOString().slice(0, 10);
   const visible = await getVisibleUserIds(user);
   const balances = await prisma.leaveBalance.findMany({
@@ -151,7 +154,8 @@ export async function adminStats(user: SessionUser) {
     // Same source as the /approvals page so the dashboard count always matches it.
     listPendingForApproval(user),
     usersWithMissingInfo(user),
-    balanceIssueRows(user),
+    // adminStats already reconciled above — don't run the accrual sync twice.
+    balanceIssueRows(user, { skipSync: true }),
   ]);
 
   const statusOf = new Map(statusCounts.map((s: (typeof statusCounts)[number]) => [s.status, s._count._all]));

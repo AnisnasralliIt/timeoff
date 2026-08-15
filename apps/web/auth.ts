@@ -2,12 +2,13 @@ import NextAuth from "next-auth";
 import Credentials from "next-auth/providers/credentials";
 import Google from "next-auth/providers/google";
 import bcrypt from "bcryptjs";
+import { cache } from "react";
 import { prisma } from "@timeoff/db";
 import type { Role } from "@timeoff/db";
 
 const googleConfigured = Boolean(process.env.AUTH_GOOGLE_ID && process.env.AUTH_GOOGLE_SECRET);
 
-export const { handlers, auth, signIn, signOut } = NextAuth({
+const { handlers, auth: rawAuth, signIn, signOut } = NextAuth({
   session: { strategy: "jwt" },
   pages: { signIn: "/login" },
   trustHost: true,
@@ -88,3 +89,10 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
     },
   },
 });
+
+// The layout, notification bell and each page all call `auth()` in the same
+// request. Without memoization every call re-runs the session callback (a DB
+// hit per call). Caching it per request returns the identical session for all
+// call sites, so a navigation resolves the user exactly once.
+export const auth = cache(rawAuth);
+export { handlers, signIn, signOut };

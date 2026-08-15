@@ -244,6 +244,20 @@ function perYearAccrued(options: {
 }
 
 /**
+ * Preloaded inputs for carry-over computation, fetched once per company so the
+ * mass reconciliation in `syncCurrentAccruals` avoids N+1 queries. Carries the
+ * exact same data `carryOverFor` would query per row, so results are identical
+ * — only the transport changes. Absent for single-user write paths
+ * (`resolveBalanceForDate`), which keep querying per row.
+ */
+interface CarryOverContext {
+  /** `userId:leaveTypeId` → sum of adjustment on rows ending before the target year. */
+  historicalAdjustments: Map<string, number>;
+  /** All APPROVED/PENDING requests company-wide; filtered in memory per user. */
+  usage: Array<{ userId: string; leaveTypeId: string; startDate: string; totalDays: number }>;
+}
+
+/**
  * How many days carry into the leave year starting at `targetYearStart`, capped
  * at the policy limit (L4).
  *
@@ -275,6 +289,7 @@ async function carryOverFor(
   leaveTypeId: string,
   policy: { annualAllotment: number; carryOverDays: number },
   targetYearStart: string,
+  ctx?: CarryOverContext,
 ): Promise<number> {
   if (policy.carryOverDays <= 0) return 0;
   const targetStartYear = Number(targetYearStart.slice(0, 4));
@@ -293,18 +308,29 @@ async function carryOverFor(
   // Historical yearly records strictly before the target year. Their
   // `adjustment` grants/takes days; `carriedOver` is deliberately excluded (the
   // surplus of even earlier years — adding it would double-count).
-  const historical = await db.leaveBalance.findMany({
-    where: { userId: user.id, leaveTypeId, periodEnd: { lte: priorRange.end } },
-    orderBy: { periodStart: "asc" },
-  });
-  const totalAdjustments = round2(historical.reduce((sum, r) => sum + r.adjustment, 0));
+  const totalAdjustments = ctx
+    ? round2(ctx.historicalAdjustments.get(`${user.id}:${leaveTypeId}`) ?? 0)
+    : round2(
+        (await db.leaveBalance.findMany({
+          where: { userId: user.id, leaveTypeId, periodEnd: { lte: priorRange.end } },
+          orderBy: { periodStart: "asc" },
+        })).reduce((sum, r) => sum + r.adjustment, 0),
+      );
 
   // Usage is the employee's committed APPROVED/PENDING vacation across the
   // whole history — the app's single source of truth for what was taken.
-  const totalUsed = await vacationUsedInRange(db, user.id, leaveTypeId, {
-    start: user.employmentStartDate,
-    end: priorRange.end,
-  });
+  const totalUsed = ctx
+    ? round2(
+        ctx.usage.reduce((sum, r) => {
+          if (r.userId !== user.id || r.leaveTypeId !== leaveTypeId) return sum;
+          if (r.startDate < user.employmentStartDate || r.startDate > priorRange.end) return sum;
+          return sum + r.totalDays;
+        }, 0),
+      )
+    : await vacationUsedInRange(db, user.id, leaveTypeId, {
+        start: user.employmentStartDate,
+        end: priorRange.end,
+      });
 
   const totalUnused = Math.max(0, round2(earnedThroughPriorYear + totalAdjustments - totalUsed));
   return round2(cappedCarryOver(policy.carryOverDays, totalUnused));
@@ -329,6 +355,7 @@ async function reconcileBalanceRow(
   user: { employmentStartDate: string; employmentType: string },
   policy: { annualAllotment: number; carryOverDays: number },
   row: CurrentBalanceRow,
+  ctx?: CarryOverContext,
 ) {
   const today = todayISO();
   const ratio = user.employmentType === "PART_TIME" ? 0.5 : 1;
@@ -351,6 +378,7 @@ async function reconcileBalanceRow(
       row.leaveTypeId,
       policy,
       row.periodStart,
+      ctx,
     );
   }
   const data: { accrued?: number; carriedOver?: number } = {};
@@ -368,8 +396,13 @@ async function reconcileBalanceRow(
  * unused history. Only `accrued` and `carriedOver` are touched — adjustment,
  * used and pending are preserved. Idempotent: rows already correct are left
  * alone.
+ *
+ * Pass `userId` to reconcile a single user instead of the whole company — used
+ * by personal pages (dashboard, request form) whose displayed balances belong
+ * to exactly one employee. The per-row math is identical; only the input scope
+ * narrows, so the reconciled values are the same either way.
  */
-export async function syncCurrentAccruals(db: Db, companyId: string): Promise<void> {
+export async function syncCurrentAccruals(db: Db, companyId: string, userId?: string): Promise<void> {
   const company = await db.company.findUniqueOrThrow({
     where: { id: companyId },
     select: { id: true, fiscalYearStartMonth: true },
@@ -383,6 +416,7 @@ export async function syncCurrentAccruals(db: Db, companyId: string): Promise<vo
       periodStart: { lte: today },
       periodEnd: { gte: priorStart },
       user: { status: "ACTIVE" },
+      ...(userId ? { userId } : {}),
     },
     include: {
       user: {
@@ -404,6 +438,28 @@ export async function syncCurrentAccruals(db: Db, companyId: string): Promise<vo
     },
   });
 
+  // Load the carry-over inputs once instead of per row: historical rows
+  // (adjustments) and committed APPROVED/PENDING usage, both bounded by the end
+  // of the leave year before the current one. Each current-year row recomputes
+  // its carry-over against these same inputs, so the math is identical to the
+  // per-row query path — just without N+1. Scoped to `userId` when given.
+  const priorRangeEnd = leaveYearRange(company.fiscalYearStartMonth, current.startYear - 1).end;
+  const [historicalBalances, usage] = await Promise.all([
+    db.leaveBalance.findMany({
+      where: { companyId, periodEnd: { lte: priorRangeEnd }, ...(userId ? { userId } : {}) },
+      select: { userId: true, leaveTypeId: true, adjustment: true },
+    }),
+    db.leaveRequest.findMany({
+      where: { companyId, status: { in: ["APPROVED", "PENDING"] }, ...(userId ? { userId } : {}) },
+      select: { userId: true, leaveTypeId: true, startDate: true, totalDays: true },
+    }),
+  ]);
+  const historicalAdjustments = new Map<string, number>();
+  for (const b of historicalBalances) {
+    const key = `${b.userId}:${b.leaveTypeId}`;
+    historicalAdjustments.set(key, (historicalAdjustments.get(key) ?? 0) + b.adjustment);
+  }
+  const carryOverContext: CarryOverContext = { historicalAdjustments, usage };
   for (const row of rows) {
     const policy = effectivePolicyFor(
       policies,
@@ -418,6 +474,7 @@ export async function syncCurrentAccruals(db: Db, companyId: string): Promise<vo
       { employmentStartDate: row.user.employmentStartDate, employmentType: row.user.employmentType },
       policy,
       row,
+      carryOverContext,
     );
     if (updated.accrued !== row.accrued || updated.carriedOver !== row.carriedOver) {
       await audit(db, {

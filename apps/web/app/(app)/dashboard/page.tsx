@@ -40,7 +40,9 @@ export default async function DashboardPage() {
       // Same reconciliation the admin views use: current-year `accrued` keeps
       // growing month over month and `carriedOver` reflects the corrected
       // previous-year leftover, so the dashboard never shows a stale number.
-      await syncCurrentAccruals(prisma, user.companyId!);
+      // Scoped to the signed-in user: only this page's balances are reconciled,
+      // never a full-company recalculation on a personal read.
+      await syncCurrentAccruals(prisma, user.companyId!, user.id);
       return prisma.leaveBalance.findMany({
         where: { userId: user.id, periodStart: { lte: today }, periodEnd: { gte: today } },
         include: { leaveType: true },
