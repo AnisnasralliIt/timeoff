@@ -1,10 +1,12 @@
 import type { Metadata } from "next";
 import { getLocale, getTranslations } from "next-intl/server";
+import { TriangleAlert } from "lucide-react";
 import { prisma } from "@timeoff/db";
-import { todayISO } from "@timeoff/domain";
+import { addDaysISO, eachDay, todayISO } from "@timeoff/domain";
 import { requireAuth } from "@/lib/session";
-import { canExport, listCalendarRoster } from "@/lib/services/calendar";
+import { canExport, listCalendarRoster, listCalendarRequests } from "@/lib/services/calendar";
 import { getUserScope, getVisibleUserIds } from "@/lib/permissions";
+import { staffingWarnings } from "@/lib/calendar-shared";
 import { CalendarExplorer } from "@/components/calendar/explorer";
 import { CalendarFeedCard } from "@/components/calendar-feed";
 
@@ -63,6 +65,50 @@ export default async function CalendarPage() {
 
   const roster = await listCalendarRoster(user);
 
+  // Who's off today — scoped exactly like every other calendar query.
+  const offToday = await listCalendarRequests(user, {
+    from: today,
+    to: today,
+    statuses: ["APPROVED", "PENDING"],
+  });
+  const offTodayUnique = [...new Map(offToday.map((r) => [r.userId, r])).values()];
+
+  // Department availability from the scoped roster + today's absences.
+  const availability = departments
+    .map((d) => {
+      const total = roster.filter((m) => m.departmentId === d.id).length;
+      const off = new Set(offToday.filter((r) => r.departmentId === d.id).map((r) => r.userId)).size;
+      return { id: d.id, name: d.name, total, available: Math.max(0, total - off) };
+    })
+    .filter((d) => d.total > 0);
+
+  // Staffing warnings for the next two weeks (confirmed absences only).
+  const warningEnd = addDaysISO(today, 13);
+  const windowAbsences = await prisma.leaveRequest.findMany({
+    where: {
+      companyId: user.companyId,
+      status: "APPROVED",
+      startDate: { lte: warningEnd },
+      endDate: { gte: today },
+      ...(visible === "all" ? {} : { user: { id: { in: visible } } }),
+    },
+    select: {
+      userId: true,
+      startDate: true,
+      endDate: true,
+      user: { select: { department: { select: { name: true } } } },
+    },
+  });
+  const warnings = staffingWarnings(
+    windowAbsences.map((a) => ({
+      userId: a.userId,
+      startDate: a.startDate,
+      endDate: a.endDate,
+      departmentName: a.user.department.name,
+    })),
+    eachDay(today, warningEnd),
+  ).slice(0, 4);
+
   return (
     <div className="space-y-6">
       <div>
@@ -89,6 +135,41 @@ export default async function CalendarPage() {
         </div>
 
         <aside className="space-y-4">
+          <div className="rounded-lg border border-border bg-card p-4 shadow-sm">
+            <h2 className="font-display text-base font-semibold text-foreground">
+              {t("whosOffToday")}
+            </h2>
+            {offTodayUnique.length === 0 ? (
+              <p className="mt-2 text-sm text-muted-foreground">{t("whosOffNone")}</p>
+            ) : (
+              <ul className="mt-2 space-y-2">
+                {offTodayUnique.map((request: (typeof offTodayUnique)[number]) => (
+                  <li
+                    key={request.userId}
+                    className="flex items-center justify-between gap-2 text-sm"
+                  >
+                    <div className="min-w-0">
+                      <p className="truncate font-medium text-foreground">{request.userName}</p>
+                      <p className="truncate text-xs text-muted-foreground">
+                        {request.departmentName}
+                      </p>
+                    </div>
+                    <span
+                      className="size-2.5 shrink-0 rounded-full"
+                      style={{
+                        background:
+                          request.status === "APPROVED"
+                            ? request.leaveTypeColor
+                            : "var(--color-muted-foreground)",
+                      }}
+                      aria-hidden
+                    />
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+
           <div className="rounded-lg border border-border bg-card p-4 shadow-sm">
             <h2 className="font-display text-base font-semibold text-foreground">
               {t("upcomingLeave")}
@@ -122,6 +203,63 @@ export default async function CalendarPage() {
                       }}
                       aria-hidden
                     />
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+
+          <div className="rounded-lg border border-border bg-card p-4 shadow-sm">
+            <h2 className="font-display text-base font-semibold text-foreground">
+              {t("departmentAvailability")}
+            </h2>
+            {availability.length === 0 ? (
+              <p className="mt-2 text-sm text-muted-foreground">{t("availabilityEmpty")}</p>
+            ) : (
+              <ul className="mt-3 space-y-3">
+                {availability.map((d: (typeof availability)[number]) => (
+                  <li key={d.id}>
+                    <div className="flex items-baseline justify-between gap-2 text-sm">
+                      <span className="truncate font-medium text-foreground">{d.name}</span>
+                      <span className="text-xs text-muted-foreground">
+                        {t("availabilityFraction", { available: d.available, total: d.total })}
+                      </span>
+                    </div>
+                    <div className="mt-1 h-1.5 w-full overflow-hidden rounded-full bg-muted">
+                      <div
+                        className="h-full rounded-full bg-primary"
+                        style={{
+                          width: `${d.total ? (d.available / d.total) * 100 : 0}%`,
+                        }}
+                      />
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+
+          <div className="rounded-lg border border-border bg-card p-4 shadow-sm">
+            <h2 className="font-display text-base font-semibold text-foreground">
+              {t("staffingWarnings")}
+            </h2>
+            {warnings.length === 0 ? (
+              <p className="mt-2 text-sm text-muted-foreground">{t("staffingWarningsNone")}</p>
+            ) : (
+              <ul className="mt-2 space-y-2">
+                {warnings.map((warning: (typeof warnings)[number], index: number) => (
+                  <li
+                    key={`${warning.departmentName}-${warning.date}-${index}`}
+                    className="flex items-start gap-2 text-sm"
+                  >
+                    <TriangleAlert className="mt-0.5 size-4 shrink-0 text-destructive" aria-hidden />
+                    <p className="text-foreground">
+                      {t("staffingWarningLine", {
+                        count: warning.count,
+                        department: warning.departmentName,
+                        date: shortDate(warning.date, locale),
+                      })}
+                    </p>
                   </li>
                 ))}
               </ul>

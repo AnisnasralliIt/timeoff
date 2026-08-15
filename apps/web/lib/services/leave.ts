@@ -412,13 +412,25 @@ export async function syncCurrentAccruals(db: Db, companyId: string): Promise<vo
       row.leaveTypeId,
     );
     if (!policy) continue;
-    await reconcileBalanceRow(
+    const updated = await reconcileBalanceRow(
       db,
       company,
       { employmentStartDate: row.user.employmentStartDate, employmentType: row.user.employmentType },
       policy,
       row,
     );
+    if (updated.accrued !== row.accrued || updated.carriedOver !== row.carriedOver) {
+      await audit(db, {
+        companyId,
+        actorId: null,
+        action: "balance.sync",
+        entityType: "LeaveBalance",
+        entityId: updated.id,
+        before: { accrued: row.accrued, carriedOver: row.carriedOver },
+        after: { accrued: updated.accrued, carriedOver: updated.carriedOver },
+        metadata: { source: "accrual-sync" },
+      });
+    }
   }
 }
 
@@ -659,29 +671,132 @@ async function resolveApprover(
   return null;
 }
 
+/** Keys whose values must never be stored in the audit trail. */
+const SENSITIVE_KEY_RE = /passw|secret|token|apikey|api[_-]?key|credential|session|auth|cookie/i;
+
+function sanitizeValue(value: unknown): unknown {
+  if (Array.isArray(value)) return value.map(sanitizeValue);
+  if (value && typeof value === "object") {
+    const out: Record<string, unknown> = {};
+    for (const [key, val] of Object.entries(value as Record<string, unknown>)) {
+      if (SENSITIVE_KEY_RE.test(key)) continue;
+      out[key] = sanitizeValue(val);
+    }
+    return out;
+  }
+  return value;
+}
+
+/** Strips secrets from before/after/metadata before they hit the audit table. */
+function sanitizeJson(value: unknown): Prisma.InputJsonValue | undefined {
+  if (value === undefined || value === null) return undefined;
+  return sanitizeValue(value) as Prisma.InputJsonValue;
+}
+
+/** Resolves the actor display name; null when the actor is a system process. */
+async function resolveActorName(db: Db, actorId: string | null): Promise<string | null> {
+  if (!actorId) return null;
+  const row = await db.user.findUnique({ where: { id: actorId }, select: { name: true } });
+  return row?.name ?? null;
+}
+
+/** Resolves the affected employee id (+ display name for named entities). */
+async function resolveAuditTarget(
+  db: Db,
+  entityType: string,
+  entityId: string | null,
+): Promise<{ entityName: string | null; employeeId: string | null }> {
+  if (!entityId) return { entityName: null, employeeId: null };
+  switch (entityType) {
+    case "User":
+    case "user":
+      return db.user
+        .findUnique({ where: { id: entityId }, select: { name: true } })
+        .then((row) => ({ entityName: row?.name ?? null, employeeId: entityId }));
+    case "LeaveRequest":
+    case "leaveRequest":
+      return db.leaveRequest
+        .findUnique({
+          where: { id: entityId },
+          select: { userId: true, user: { select: { name: true } } },
+        })
+        .then((row) => ({ entityName: row?.user?.name ?? null, employeeId: row?.userId ?? null }));
+    case "LeaveBalance":
+    case "leaveBalance":
+      return db.leaveBalance
+        .findUnique({
+          where: { id: entityId },
+          select: { userId: true, user: { select: { name: true } } },
+        })
+        .then((row) => ({ entityName: row?.user?.name ?? null, employeeId: row?.userId ?? null }));
+    case "Department":
+    case "department":
+      return db.department
+        .findUnique({ where: { id: entityId }, select: { name: true } })
+        .then((row) => ({ entityName: row?.name ?? null, employeeId: null }));
+    case "LeaveType":
+    case "leaveType":
+      return db.leaveType
+        .findUnique({ where: { id: entityId }, select: { name: true } })
+        .then((row) => ({ entityName: row?.name ?? null, employeeId: null }));
+    case "LeavePolicy":
+    case "leavePolicy":
+      return db.leavePolicy
+        .findUnique({ where: { id: entityId }, select: { name: true } })
+        .then((row) => ({ entityName: row?.name ?? null, employeeId: null }));
+    case "Company":
+    case "company":
+      return db.company
+        .findUnique({ where: { id: entityId }, select: { name: true } })
+        .then((row) => ({ entityName: row?.name ?? null, employeeId: null }));
+    default:
+      return { entityName: null, employeeId: null };
+  }
+}
+
+/**
+ * Appends an immutable audit entry. `actorId` is optional: null/omitted means
+ * a system process (e.g. scheduled accrual sync). Display names and the
+ * affected employee are resolved automatically (and survive later deletion),
+ * or can be supplied explicitly to avoid an extra query.
+ */
 export async function audit(
   db: Db,
   input: {
     companyId: string;
-    actorId: string;
+    actorId?: string | null;
     action: string;
     entityType: string;
     entityId: string;
     before?: unknown;
     after?: unknown;
     metadata?: unknown;
+    actorName?: string | null;
+    entityName?: string | null;
+    employeeId?: string | null;
   },
 ): Promise<void> {
+  const [actorName, target] = await Promise.all([
+    input.actorName !== undefined ? Promise.resolve(input.actorName) : resolveActorName(db, input.actorId ?? null),
+    input.entityName !== undefined && input.employeeId !== undefined
+      ? Promise.resolve(null)
+      : resolveAuditTarget(db, input.entityType, input.entityId),
+  ]);
+  const entityName = input.entityName !== undefined ? input.entityName : (target?.entityName ?? null);
+  const employeeId = input.employeeId !== undefined ? input.employeeId : (target?.employeeId ?? null);
   await db.auditLog.create({
     data: {
       companyId: input.companyId,
-      actorId: input.actorId,
+      actorId: input.actorId ?? null,
+      actorNameSnapshot: actorName,
       action: input.action,
       entityType: input.entityType,
       entityId: input.entityId,
-      before: input.before === undefined ? undefined : (input.before as object),
-      after: input.after === undefined ? undefined : (input.after as object),
-      metadata: input.metadata === undefined ? undefined : (input.metadata as object),
+      entityNameSnapshot: entityName,
+      employeeId,
+      before: sanitizeJson(input.before),
+      after: sanitizeJson(input.after),
+      metadata: sanitizeJson(input.metadata),
     },
   });
 }
@@ -934,7 +1049,9 @@ export async function createLeaveRequest(user: SessionUser, input: CreateLeaveIn
       action: "leaveRequest.create",
       entityType: "LeaveRequest",
       entityId: created.id,
-      after: { status, totalDays, startDate, endDate },
+      entityName: dbUser.name,
+      employeeId: user.id,
+      after: { status, totalDays, startDate, endDate, leaveType: leaveType.name },
     });
 
     return created;
@@ -982,6 +1099,7 @@ export async function cancelLeaveRequest(user: SessionUser, requestId: string, r
       action: "leaveRequest.cancel",
       entityType: "LeaveRequest",
       entityId: requestId,
+      employeeId: request.userId,
       before: { status: request.status },
       after: { status: "CANCELLED" },
     });
@@ -1236,8 +1354,10 @@ export async function decideLeaveRequest(
       action: outcome === "APPROVED" ? "leaveRequest.approve" : "leaveRequest.reject",
       entityType: "LeaveRequest",
       entityId: requestId,
+      entityName: request.user.name,
+      employeeId: request.userId,
       before: { status: "PENDING", level: request.currentApprovalLevel },
-      after: { status: nextStatus, level: nextLevel },
+      after: { status: nextStatus, level: nextLevel, leaveType: request.leaveType.name },
     });
   });
 
@@ -1330,7 +1450,9 @@ export async function createDelegation(user: SessionUser, input: DelegationInput
     action: "approvalDelegation.create",
     entityType: "ApprovalDelegation",
     entityId: created.id,
-    after: { delegateId: input.delegateId, startsOn: created.startsOn, endsOn: created.endsOn },
+    entityName: delegate.name,
+    employeeId: user.id,
+    after: { delegateName: delegate.name, startsOn: created.startsOn, endsOn: created.endsOn },
   });
 
   return created;
@@ -1359,6 +1481,7 @@ export async function deactivateDelegation(user: SessionUser, delegationId: stri
     action: "approvalDelegation.deactivate",
     entityType: "ApprovalDelegation",
     entityId: delegationId,
+    employeeId: delegation.userId,
     before: { active: true },
     after: { active: false },
   });
@@ -1392,5 +1515,116 @@ export async function listDelegationCandidates(user: SessionUser) {
     },
     select: { id: true, name: true, email: true, role: true },
     orderBy: { name: "asc" },
+  });
+}
+
+/* --------------------------- Balance history ----------------------------- */
+
+export interface BalanceHistoryActivity {
+  startDate: string;
+  endDate: string;
+  leaveType: string;
+  totalDays: number;
+  status: LeaveRequestStatus;
+  reason: string | null;
+}
+
+export interface BalanceHistoryYear {
+  periodStart: string;
+  periodEnd: string;
+  leaveType: string;
+  accrued: number;
+  carriedOver: number;
+  adjustment: number;
+  used: number;
+  pending: number;
+  available: number;
+  isCurrent: boolean;
+  activity: BalanceHistoryActivity[];
+}
+
+/**
+ * READ-ONLY balance history for one employee: the stored yearly balance rows
+ * exactly as persisted (newest leave year first), each with its committed
+ * APPROVED/PENDING leave activity for that year. `available` is the stored
+ * formula from the domain package (`availableBalance`), never recalculated
+ * against today's policy — a later policy change must not rewrite the past.
+ *
+ * This function never calls `syncCurrentAccruals` and never writes anything.
+ * The viewer may read only their own history unless they hold a people-ops
+ * role (HR/ADMIN/SUPER_ADMIN), in which case they may read any employee (active
+ * or not) within their own company. Enforcement happens here on the server.
+ *
+ * Two fixed queries (balances + requests), no N+1.
+ */
+export async function balanceHistoryFor(
+  viewer: SessionUser,
+  targetUserId: string,
+): Promise<BalanceHistoryYear[]> {
+  const isPeopleOps = PEOPLE_OPS_ROLES.has(viewer.role ?? "EMPLOYEE");
+  if (!isPeopleOps && viewer.id !== targetUserId) {
+    throw new LeaveError("You cannot view this employee's balance history.", "cannotAccessRequest");
+  }
+
+  const company = await prisma.company.findUniqueOrThrow({
+    where: { id: viewer.companyId },
+    select: { fiscalYearStartMonth: true },
+  });
+  const target = await prisma.user.findFirst({
+    where: { id: targetUserId, companyId: viewer.companyId },
+    select: { id: true },
+  });
+  if (!target) throw new LeaveError("User not found.", "userNotFound");
+
+  const today = todayISO();
+  const [rows, requests] = await Promise.all([
+    prisma.leaveBalance.findMany({
+      where: { companyId: viewer.companyId, userId: targetUserId },
+      include: { leaveType: { select: { name: true } } },
+      orderBy: { periodStart: "desc" },
+    }),
+    prisma.leaveRequest.findMany({
+      where: {
+        companyId: viewer.companyId,
+        userId: targetUserId,
+        status: { in: ["APPROVED", "PENDING"] },
+      },
+      include: { leaveType: { select: { name: true } } },
+      orderBy: { startDate: "asc" },
+    }),
+  ]);
+
+  // Bucket requests into leave years by their start date — the app's existing
+  // attribution rule — keyed on the leave year's period start.
+  const byYear = new Map<string, { activity: BalanceHistoryActivity[] }>();
+  for (const r of requests) {
+    const { start } = currentLeaveYear(company.fiscalYearStartMonth, r.startDate);
+    const bucket = byYear.get(start) ?? { activity: [] };
+    bucket.activity.push({
+      startDate: r.startDate,
+      endDate: r.endDate,
+      leaveType: r.leaveType.name,
+      totalDays: r.totalDays,
+      status: r.status,
+      reason: r.reason,
+    });
+    byYear.set(start, bucket);
+  }
+
+  return rows.map((row) => {
+    const bucket = byYear.get(row.periodStart);
+    return {
+      periodStart: row.periodStart,
+      periodEnd: row.periodEnd,
+      leaveType: row.leaveType.name,
+      accrued: row.accrued,
+      carriedOver: row.carriedOver,
+      adjustment: row.adjustment,
+      used: row.used,
+      pending: row.pending,
+      available: availableBalance(row),
+      isCurrent: row.periodStart <= today && row.periodEnd >= today,
+      activity: bucket?.activity ?? [],
+    };
   });
 }

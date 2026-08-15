@@ -57,8 +57,11 @@ import {
   listDelegationCandidates,
   syncCurrentAccruals,
   resolveBalanceForDate,
+  balanceHistoryFor,
+  audit,
   LeaveError,
 } from "../lib/services/leave";
+import { listAuditLog, canViewAuditLog, AuditAccessError } from "../lib/services/audit";
 import {
   createUserForAdmin,
   updateUserForAdmin,
@@ -1195,6 +1198,223 @@ async function main() {
     }
   });
 
+  /* ---- Balance history feature: read-only stored rows, newest-first,
+   * activity bucketed per leave year, immutable to policy changes, and
+   * server-enforced authorization (own history or people-ops within company). ---- */
+  await check("balance history: stored rows newest-first, activity bucketed, policy-immutable, authorized", async () => {
+    const company = await prisma.company.findFirst();
+    assert(company, "seed company not found");
+    const vacation = await prisma.leaveType.findFirst({ where: { companyId: company.id, name: "Vacation" } });
+    assert(vacation, "seed Vacation leave type not found");
+    const policy = await prisma.leavePolicy.findFirst({
+      where: { companyId: company.id, leaveTypeId: vacation.id, annualAllotment: { gt: 0 }, departmentId: null },
+    });
+    assert(policy, "no company-wide Vacation policy");
+    const cap = policy.carryOverDays;
+    const allotment = policy.annualAllotment;
+
+    const makeUser = (email: string, start: string) =>
+      createUserForAdmin(superAdmin, {
+        name: "Hist User",
+        email,
+        role: "EMPLOYEE",
+        password: "s3cure-pass-99",
+        departmentId: superAdmin.departmentId!,
+        employmentStartDate: start,
+      });
+
+    let foreign: { companyId: string; userId: string; departmentId: string } | null = null;
+    const made: Array<{ id: string }> = [];
+    try {
+      // Fresh employee: only the current-year row exists, nothing carried,
+      // no activity — and the numbers come straight from storage.
+      const fresh = await makeUser("hist.fresh@acme.dev", "2026-08-01");
+      made.push(fresh);
+      const freshHistory = (await balanceHistoryFor(admin, fresh.id)).filter((y) => y.leaveType === vacation.name);
+      assert.equal(freshHistory.length, 1, "fresh employee has exactly one vacation balance year");
+      const freshStored = await prisma.leaveBalance.findFirst({
+        where: { userId: fresh.id, leaveTypeId: vacation.id },
+      });
+      assert(freshStored, "fresh employee balance row missing");
+      assert.equal(freshHistory[0]!.isCurrent, true, "fresh employee row is the current leave year");
+      assert.equal(freshHistory[0]!.carriedOver, 0, "fresh employee carries nothing over");
+      assert.equal(freshHistory[0]!.accrued, freshStored.accrued, "history accrued must match the stored row");
+      assert.equal(freshHistory[0]!.activity.length, 0, "fresh employee has no activity");
+
+      // Employee with three leave years, one request per year, immutability to
+      // policy changes, and correct per-year bucketing / ordering.
+      const multi = await makeUser("hist.multi@acme.dev", "2024-01-01");
+      made.push(multi);
+      await prisma.leaveBalance.createMany({
+        data: [
+          {
+            companyId: company.id,
+            userId: multi.id,
+            leaveTypeId: vacation.id,
+            periodStart: "2024-01-01",
+            periodEnd: "2024-12-31",
+            accrued: allotment,
+            carriedOver: 0,
+            adjustment: 0,
+            used: 8,
+            pending: 0,
+          },
+          {
+            companyId: company.id,
+            userId: multi.id,
+            leaveTypeId: vacation.id,
+            periodStart: "2025-01-01",
+            periodEnd: "2025-12-31",
+            accrued: allotment,
+            carriedOver: 4,
+            adjustment: 0,
+            used: 6,
+            pending: 0,
+          },
+        ],
+      });
+      // The 2026 row is auto-created by createUserForAdmin; pin it to known
+      // stored values so the assertions check storage, not a live recompute.
+      const currentRow = await prisma.leaveBalance.findFirst({
+        where: { userId: multi.id, leaveTypeId: vacation.id, periodStart: "2026-01-01" },
+      });
+      assert(currentRow, "2026 balance row missing for hist.multi");
+      await prisma.leaveBalance.update({
+        where: { id: currentRow.id },
+        data: { accrued: 12, carriedOver: 5, adjustment: 0, used: 3, pending: 2 },
+      });
+      await prisma.leaveRequest.createMany({
+        data: [
+          {
+            companyId: company.id,
+            userId: multi.id,
+            leaveTypeId: vacation.id,
+            startDate: "2024-07-01",
+            endDate: "2024-07-31",
+            totalDays: 8,
+            status: "APPROVED",
+          },
+          {
+            companyId: company.id,
+            userId: multi.id,
+            leaveTypeId: vacation.id,
+            startDate: "2025-07-01",
+            endDate: "2025-07-31",
+            totalDays: 6,
+            status: "APPROVED",
+          },
+          {
+            companyId: company.id,
+            userId: multi.id,
+            leaveTypeId: vacation.id,
+            startDate: "2026-02-02",
+            endDate: "2026-02-04",
+            totalDays: 3,
+            status: "APPROVED",
+          },
+          {
+            companyId: company.id,
+            userId: multi.id,
+            leaveTypeId: vacation.id,
+            startDate: "2026-08-01",
+            endDate: "2026-08-02",
+            totalDays: 2,
+            status: "PENDING",
+          },
+        ],
+      });
+
+      const history = (await balanceHistoryFor(admin, multi.id)).filter((y) => y.leaveType === vacation.name);
+      assert.equal(history.length, 3, "history must include all three vacation leave years");
+      assert.equal(history[0]!.periodStart, "2026-01-01", "newest leave year first");
+      assert.equal(history[1]!.periodStart, "2025-01-01", "middle leave year second");
+      assert.equal(history[2]!.periodStart, "2024-01-01", "oldest leave year last");
+      assert.equal(history[0]!.isCurrent, true, "2026 is the current leave year");
+      assert.equal(history[1]!.isCurrent, false, "2025 is not the current leave year");
+      assert.equal(history[0]!.accrued, 12, "stored 2026 accrued surfaces unchanged");
+      assert.equal(history[0]!.carriedOver, 5, "stored 2026 carriedOver surfaces unchanged");
+      assert.equal(history[0]!.used, 3, "stored 2026 used surfaces unchanged");
+      assert.equal(history[0]!.pending, 2, "stored 2026 pending surfaces unchanged");
+      assert.equal(
+        history[0]!.available,
+        12 + 5 - 3 - 2,
+        "available comes from the stored formula, never recomputed",
+      );
+      assert.equal(history[0]!.activity.length, 2, "2026 activity = approved + pending request");
+      assert.equal(history[0]!.activity[0]!.status, "APPROVED", "2026 activity sorted by start date");
+      assert.equal(history[0]!.activity[1]!.status, "PENDING", "2026 activity sorted by start date");
+      assert.equal(history[1]!.activity.length, 1, "2025 activity = one approved request");
+      assert.equal(history[2]!.activity.length, 1, "2024 activity = one approved request");
+      assert.equal(history[1]!.activity[0]!.totalDays, 6, "2025 activity carries the request's day count");
+
+      // A policy change must NOT rewrite what history shows (stored rows).
+      const before = JSON.stringify(history);
+      await prisma.leavePolicy.update({
+        where: { id: policy.id },
+        data: { annualAllotment: allotment + 6, carryOverDays: Math.max(1, cap - 5) },
+      });
+      const after = (await balanceHistoryFor(admin, multi.id)).filter((y) => y.leaveType === vacation.name);
+      assert.equal(JSON.stringify(after), before, "policy change must not rewrite historical rows");
+      await prisma.leavePolicy.update({ where: { id: policy.id }, data: { annualAllotment: allotment, carryOverDays: cap } });
+
+      // Authorization: employees may read only their own history; people-ops
+      // may read anyone in their company; nobody may read across companies.
+      await assert.rejects(
+        () => balanceHistoryFor(employee, multi.id),
+        (e) => e instanceof LeaveError,
+        "EMPLOYEE must not read another employee's history",
+      );
+      const own = await balanceHistoryFor(employee, employee.id);
+      assert(own.length > 0, "EMPLOYEE can read their own history");
+      assert.equal(
+        (await balanceHistoryFor(hr, multi.id)).filter((y) => y.leaveType === vacation.name).length,
+        3,
+        "HR can read any employee in-company",
+      );
+      await assert.rejects(
+        () => balanceHistoryFor(superAdmin, "hist-does-not-exist"),
+        (e) => e instanceof LeaveError,
+        "nonexistent target must be rejected",
+      );
+
+      // Cross-company: a user in a different company is invisible to admin.
+      const otherCompany = await prisma.company.create({
+        data: { name: "Hist Foreign Co", fiscalYearStartMonth: company.fiscalYearStartMonth },
+      });
+      const otherDept = await prisma.department.create({
+        data: { companyId: otherCompany.id, name: "Foreign" },
+      });
+      const foreignUser = await prisma.user.create({
+        data: {
+          companyId: otherCompany.id,
+          email: "hist.foreign@elsewhere.dev",
+          name: "Foreign Hist",
+          departmentId: otherDept.id,
+          employmentStartDate: "2026-01-01",
+        },
+      });
+      foreign = { companyId: otherCompany.id, userId: foreignUser.id, departmentId: otherDept.id };
+      await assert.rejects(
+        () => balanceHistoryFor(admin, foreignUser.id),
+        (e) => e instanceof LeaveError,
+        "admin must not read history across companies",
+      );
+    } finally {
+      await prisma.leavePolicy.update({ where: { id: policy.id }, data: { annualAllotment: allotment, carryOverDays: cap } }).catch(() => {});
+      if (foreign) {
+        await prisma.user.delete({ where: { id: foreign.userId } }).catch(() => {});
+        await prisma.department.delete({ where: { id: foreign.departmentId } }).catch(() => {});
+        await prisma.company.delete({ where: { id: foreign.companyId } }).catch(() => {});
+      }
+      for (const u of made) {
+        await prisma.leaveRequest.deleteMany({ where: { userId: u.id } });
+        await prisma.leaveBalance.deleteMany({ where: { userId: u.id } });
+        await prisma.auditLog.deleteMany({ where: { entityType: "User", entityId: u.id } });
+        await prisma.user.delete({ where: { id: u.id } }).catch(() => {});
+      }
+    }
+  });
+
   /* ---- Bug 1 fix: permanent cascading hard delete ---- */
   await check("hard delete: cascades own rows and nulls references on other users' records", async () => {
     const company = await prisma.company.findFirst();
@@ -1336,6 +1556,173 @@ async function main() {
       await prisma.user.delete({ where: { id: temp.id } }).catch(() => {});
       await prisma.auditLog.deleteMany({ where: { entityType: "User", entityId: temp.id } });
     }
+  });
+
+  /* ---- Audit log (RBAC + snapshots + immutability) ---- */
+  console.log("\n— Audit log (RBAC + snapshots) —");
+
+  await check("audit: EMPLOYEE/EXECUTIVE cannot read the log, others can", async () => {
+    assert.equal(canViewAuditLog(employee), false);
+    assert.equal(canViewAuditLog(executive), false);
+    assert.equal(canViewAuditLog(admin), true);
+    assert.equal(canViewAuditLog(hr), true);
+    assert.equal(canViewAuditLog(superAdmin), true);
+    assert.equal(canViewAuditLog(lukas), true);
+    await assert.rejects(() => listAuditLog(employee), (e) => e instanceof AuditAccessError);
+    await assert.rejects(() => listAuditLog(executive), (e) => e instanceof AuditAccessError);
+  });
+
+  await check("audit: manager sees own team only; employeeId filter cannot leak", async () => {
+    const prodMarker = `audit-seed-prod-${Date.now()}`;
+    const engMarker = `audit-seed-eng-${Date.now()}`;
+    const felixRow = await prisma.user.findUnique({ where: { id: felix.id }, select: { name: true } });
+    const employeeRowName = (await prisma.user.findUnique({ where: { id: employee.id }, select: { name: true } }))?.name;
+    assert(felixRow && employeeRowName, "seed users missing");
+    try {
+      // Event about a Product employee — outside lukas's (Engineering) team.
+      await audit(prisma, {
+        companyId: superAdmin.companyId!,
+        actorId: employee.id,
+        action: "user.update",
+        entityType: "AuditSeed",
+        entityId: prodMarker,
+        entityName: employeeRowName,
+        employeeId: employee.id,
+        metadata: { seed: prodMarker },
+      });
+      // Event about an Engineering employee — inside lukas's team.
+      await audit(prisma, {
+        companyId: superAdmin.companyId!,
+        actorId: felix.id,
+        action: "user.update",
+        entityType: "AuditSeed",
+        entityId: engMarker,
+        entityName: felixRow.name,
+        employeeId: felix.id,
+        metadata: { seed: engMarker },
+      });
+
+      assert.equal((await listAuditLog(admin, { search: prodMarker })).total, 1, "admin must see the Product event");
+      assert.equal((await listAuditLog(hr, { search: prodMarker })).total, 1, "HR must see the Product event");
+      assert.equal((await listAuditLog(superAdmin, { search: prodMarker })).total, 1, "SUPER_ADMIN must see the Product event");
+      assert.equal((await listAuditLog(lukas, { search: engMarker })).total, 1, "manager must see own-team event");
+      assert.equal((await listAuditLog(lukas, { search: prodMarker })).total, 0, "manager must NOT see the Product event");
+      // A guessed employeeId outside the team must not widen the manager view.
+      assert.equal(
+        (await listAuditLog(lukas, { employeeId: employee.id, search: prodMarker })).total,
+        0,
+        "manager must not leak Product rows via employeeId filter",
+      );
+      // Company-wide roles can filter by employee.
+      assert.equal(
+        (await listAuditLog(admin, { employeeId: employee.id, search: prodMarker })).total,
+        1,
+        "admin employeeId filter must match",
+      );
+    } finally {
+      await prisma.auditLog.deleteMany({ where: { entityId: { in: [prodMarker, engMarker] } } });
+    }
+  });
+
+  await check("audit: snapshots auto-resolve and survive deletion", async () => {
+    const temp = await createUserForAdmin(superAdmin, {
+      name: "Audit Victim",
+      email: "audit.victim@acme.dev",
+      role: "EMPLOYEE",
+      password: "s3cure-pass-99",
+      departmentId: superAdmin.departmentId!,
+      employmentStartDate: "2026-01-01",
+    });
+    try {
+      await audit(prisma, {
+        companyId: superAdmin.companyId!,
+        actorId: superAdmin.id,
+        action: "user.create",
+        entityType: "User",
+        entityId: temp.id,
+      });
+      const row = await prisma.auditLog.findFirst({ where: { entityType: "User", entityId: temp.id, action: "user.create" } });
+      assert(row, "create event must be logged");
+      assert.equal(row.actorNameSnapshot, superAdmin.name, "actor snapshot must auto-resolve");
+      assert.equal(row.entityNameSnapshot, "Audit Victim", "entity snapshot must auto-resolve");
+      assert.equal(row.employeeId, temp.id, "employeeId must auto-resolve for User targets");
+
+      await deleteUserForAdmin(superAdmin, temp.id);
+      const after = await prisma.auditLog.findFirst({ where: { entityType: "User", entityId: temp.id, action: "user.create" } });
+      assert(after, "create event must survive the user deletion");
+      assert.equal(after.entityNameSnapshot, "Audit Victim", "entity snapshot must survive deletion");
+      assert.equal(after.employeeId, temp.id, "employeeId must survive deletion");
+      const del = await prisma.auditLog.findFirst({ where: { entityType: "User", entityId: temp.id, action: "user.delete" } });
+      assert(del, "deletion must be audited");
+      assert.equal(del.actorId, superAdmin.id, "deletion audit actor must be kept");
+    } finally {
+      await prisma.auditLog.deleteMany({ where: { entityType: "User", entityId: temp.id } });
+      await prisma.user.deleteMany({ where: { id: temp.id } }).catch(() => {});
+    }
+  });
+
+  await check("audit: sensitive fields are never stored", async () => {
+    const marker = `audit-secret-${Date.now()}`;
+    try {
+      await audit(prisma, {
+        companyId: superAdmin.companyId!,
+        actorId: superAdmin.id,
+        action: "user.update",
+        entityType: "User",
+        entityId: marker,
+        employeeId: superAdmin.id,
+        metadata: {
+          note: "keep me",
+          password: "hunter2",
+          passwordHash: "hash-abc",
+          apiKey: "sk-live-123",
+          authToken: "tok",
+          session: "sess",
+          safe: { nested: "value", secret: "nope" },
+        },
+      });
+      const row = await prisma.auditLog.findFirst({ where: { entityId: marker } });
+      assert(row, "row must exist");
+      const stored = JSON.stringify(row.metadata);
+      assert(stored.includes("keep me"), "non-sensitive data must be kept");
+      assert(!/hunter2|hash-abc|sk-live-123|"tok"|"sess"|"nope"/.test(stored), "secrets must be stripped");
+    } finally {
+      await prisma.auditLog.deleteMany({ where: { entityId: marker } });
+    }
+  });
+
+  await check("audit: system events carry no actor", async () => {
+    const marker = `audit-sys-${Date.now()}`;
+    try {
+      await audit(prisma, {
+        companyId: superAdmin.companyId!,
+        actorId: null,
+        action: "balance.sync",
+        entityType: "LeaveBalance",
+        entityId: marker,
+        employeeId: employee.id,
+      });
+      const row = await prisma.auditLog.findFirst({ where: { entityId: marker } });
+      assert(row, "row must exist");
+      assert.equal(row.actorId, null, "system event must have no actor id");
+      assert.equal(row.actorNameSnapshot, null, "system event must have no actor name");
+    } finally {
+      await prisma.auditLog.deleteMany({ where: { entityId: marker } });
+    }
+  });
+
+  await check("audit: balance.sync is only written when values actually change", async () => {
+    const company = await prisma.company.findFirst({ select: { id: true } });
+    assert(company, "seed company missing");
+    await syncCurrentAccruals(prisma, company.id);
+    const before = await prisma.auditLog.count({
+      where: { action: "balance.sync", metadata: { path: ["source"], equals: "accrual-sync" } },
+    });
+    await syncCurrentAccruals(prisma, company.id);
+    const after = await prisma.auditLog.count({
+      where: { action: "balance.sync", metadata: { path: ["source"], equals: "accrual-sync" } },
+    });
+    assert.equal(after, before, "a no-op sync must not append audit entries");
   });
 
   /* ---- Dashboard crash regression (stale companyId) ---- */

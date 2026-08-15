@@ -1,8 +1,9 @@
 "use client";
 
+import * as React from "react";
 import { useLocale, useTranslations } from "next-intl";
 import { cn } from "@timeoff/ui";
-import { eachDay } from "@timeoff/domain";
+import { eachDay, todayISO } from "@timeoff/domain";
 import {
   clipLeaveToDays,
   leaveSegments,
@@ -10,6 +11,7 @@ import {
   type CalendarRosterMember,
 } from "@/lib/calendar-shared";
 import { LeaveBar } from "@/components/calendar/leave-bar";
+import { CalendarLegend } from "@/components/calendar/calendar-legend";
 
 interface TeamViewProps {
   requests: CalendarLeave[];
@@ -56,6 +58,7 @@ function monthSpans(days: string[], locale: string): MonthSpan[] {
 export function TeamView({ requests, roster, holidays, from, to }: TeamViewProps) {
   const locale = useLocale();
   const t = useTranslations("calendar");
+  const today = todayISO();
   const days = eachDay(from, to);
   const spans = monthSpans(days, locale);
   const total = days.length;
@@ -75,6 +78,24 @@ export function TeamView({ requests, roster, holidays, from, to }: TeamViewProps
       .filter((b): b is { leave: CalendarLeave; clip: { start: number; end: number } } => b.clip !== null)
       .map((b: { leave: CalendarLeave; clip: { start: number; end: number } }) => ({ ...b, segs: leaveSegments(b.leave, days) })),
   }));
+
+  const groups: {
+    departmentId: string;
+    departmentName: string;
+    rows: (typeof rows)[number][];
+  }[] = [];
+  for (const row of rows) {
+    const last = groups[groups.length - 1];
+    if (last && last.departmentId === row.member.departmentId) {
+      last.rows.push(row);
+    } else {
+      groups.push({
+        departmentId: row.member.departmentId,
+        departmentName: row.member.departmentName,
+        rows: [row],
+      });
+    }
+  }
 
   return (
     <div className="rounded-lg border border-border bg-card shadow-sm">
@@ -105,9 +126,14 @@ export function TeamView({ requests, roster, holidays, from, to }: TeamViewProps
               {days.map((d: string) => (
                 <div
                   key={d}
+                  title={holidays.includes(d) ? t("holidayDay") : undefined}
                   className={cn(
                     "flex items-center justify-center border-r border-border/60 text-[10px] tabular-nums text-muted-foreground last:border-r-0",
-                    isWeekendDay(d) || holidays.includes(d) ? "bg-muted/30" : "",
+                    d === today
+                      ? "bg-primary/5 font-medium text-primary"
+                      : holidays.includes(d)
+                        ? "bg-warning/10 font-medium text-warning"
+                        : isWeekendDay(d) && "bg-muted/30",
                     d.slice(-2) === "01" && "font-medium text-foreground"
                   )}
                   style={{ width: DAY_WIDTH }}
@@ -119,56 +145,62 @@ export function TeamView({ requests, roster, holidays, from, to }: TeamViewProps
           </div>
 
           {/* Rows */}
-          {rows.map(({ member, bars }: (typeof rows)[number]) => (
-            <div key={member.id} className="flex border-b border-border last:border-b-0">
-              <div className="sticky left-0 z-10 flex w-44 shrink-0 items-center gap-1.5 border-r border-border bg-card px-3 py-1">
-                <span className="min-w-0 flex-1 truncate text-xs font-medium text-foreground">
-                  {member.name}
-                </span>
-              </div>
-              <div className="relative shrink-0" style={{ width, height: ROW_HEIGHT }}>
-                <div className="absolute inset-0 flex">
-                  {days.map((d: string) => (
-                    <div
-                      key={d}
-                      className={cn(
-                        "h-full border-r border-border/60 last:border-r-0",
-                        (isWeekendDay(d) || holidays.includes(d)) && "bg-muted/30"
-                      )}
-                      style={{ width: DAY_WIDTH }}
-                    />
-                  ))}
+          {groups.map((group: (typeof groups)[number]) => (
+            <React.Fragment key={group.departmentId}>
+              <div className="flex items-center border-b border-border bg-muted/30">
+                <div className="sticky left-0 z-10 flex w-44 shrink-0 items-center border-r border-border bg-muted/40 px-3 py-1">
+                  <span className="text-[11px] font-semibold uppercase tracking-wide text-foreground">
+                    {group.departmentName}
+                  </span>
                 </div>
-                {bars.map((b: (typeof bars)[number]) => (
-                  <LeaveBar
-                    key={b.leave.id}
-                    leave={b.leave}
-                    segs={b.segs}
-                    unit="px"
-                    dayWidth={DAY_WIDTH}
-                    top={6}
-                    height={18}
-                    showLabel
-                  />
-                ))}
+                <div className="h-7 flex-1" />
               </div>
-            </div>
+              {group.rows.map(({ member, bars }: (typeof rows)[number]) => (
+                <div key={member.id} className="flex border-b border-border last:border-b-0">
+                  <div className="sticky left-0 z-10 flex w-44 shrink-0 items-center gap-1.5 border-r border-border bg-card px-3 py-1">
+                    <span className="min-w-0 flex-1 truncate text-xs font-medium text-foreground">
+                      {member.name}
+                    </span>
+                  </div>
+                  <div className="relative shrink-0" style={{ width, height: ROW_HEIGHT }}>
+                    <div className="absolute inset-0 flex">
+                      {days.map((d: string) => (
+                        <div
+                          key={d}
+                          title={holidays.includes(d) ? t("holidayDay") : undefined}
+                          className={cn(
+                            "h-full border-r border-border/60 last:border-r-0",
+                            d === today
+                              ? "bg-primary/5"
+                              : holidays.includes(d)
+                                ? "bg-warning/10"
+                                : isWeekendDay(d) && "bg-muted/30"
+                          )}
+                          style={{ width: DAY_WIDTH }}
+                        />
+                      ))}
+                    </div>
+                    {bars.map((b: (typeof bars)[number]) => (
+                      <LeaveBar
+                        key={b.leave.id}
+                        leave={b.leave}
+                        segs={b.segs}
+                        unit="px"
+                        dayWidth={DAY_WIDTH}
+                        top={6}
+                        height={18}
+                        showLabel
+                      />
+                    ))}
+                  </div>
+                </div>
+              ))}
+            </React.Fragment>
           ))}
         </div>
       </div>
-      <div className="flex items-center gap-4 border-t border-border px-4 py-2 text-xs text-muted-foreground">
-        <span className="flex items-center gap-1.5">
-          <span className="h-2.5 w-2.5 rounded-sm bg-teal-600" />
-          {t("legendApproved")}
-        </span>
-        <span className="flex items-center gap-1.5">
-          <span className="h-1 w-4 rounded-sm bg-teal-600/40" />
-          {t("legendPending")}
-        </span>
-        <span className="flex items-center gap-1.5">
-          <span className="h-2.5 w-2.5 rounded-sm border border-border bg-muted" />
-          {t("legendHoliday")}
-        </span>
+      <div className="border-t border-border px-4 py-2 text-xs text-muted-foreground">
+        <CalendarLegend requests={requests} />
       </div>
     </div>
   );

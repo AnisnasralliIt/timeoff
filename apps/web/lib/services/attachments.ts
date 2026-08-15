@@ -251,6 +251,8 @@ export async function deleteAttachment(user: SessionUser, attachmentId: string) 
     action: "attachment.delete",
     entityType: "Attachment",
     entityId: attachmentId,
+    entityName: attachment.fileName,
+    employeeId: attachment.request?.userId ?? attachment.uploaderId,
     after: { fileName: attachment.fileName, requestId: attachment.requestId },
   });
   return { ok: true as const };

@@ -58,6 +58,8 @@ export async function createFeedToken(user: SessionUser): Promise<string> {
     action: "integration.ical.rotate",
     entityType: "Integration",
     entityId: row.id,
+    entityName: "iCal feed",
+    employeeId: user.id,
     after: { kind: "ICAL" },
   });
   return token;

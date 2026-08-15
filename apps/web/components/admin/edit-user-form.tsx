@@ -40,11 +40,13 @@ export function EditUserDialog({
   departments,
   managers,
   canGrantAdmin,
+  defaultOpen = false,
 }: {
   user: AdminUser;
   departments: Dept[];
   managers: Manager[];
   canGrantAdmin: boolean;
+  defaultOpen?: boolean;
 }) {
   const t = useTranslations("adminDialogs.createUser");
   const tEdit = useTranslations("adminDialogs.editUser");
@@ -65,7 +67,7 @@ export function EditUserDialog({
   const [employmentType, setEmploymentType] = useState(user.employmentType);
 
   return (
-    <Dialog>
+    <Dialog defaultOpen={defaultOpen}>
       <DialogTrigger asChild>
         <Button variant="outline" size="sm">
           <Pencil className="size-3.5" />

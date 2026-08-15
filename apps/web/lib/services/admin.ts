@@ -1,10 +1,10 @@
 import bcrypt from "bcryptjs";
 import { prisma, type Role, type UserStatus } from "@timeoff/db";
 import type { SessionUser } from "@/lib/session";
-import { audit, LeaveError, seedBalancesForNewUser, syncCurrentAccruals } from "@/lib/services/leave";
+import { audit, LeaveError, listPendingForApproval, seedBalancesForNewUser, syncCurrentAccruals } from "@/lib/services/leave";
 import { enqueueOutbox } from "@/lib/emails";
 import { enqueueEmails } from "@/lib/queue";
-import { canGrantRole, canManageUsers, isSupervisorRole } from "@/lib/permissions";
+import { canGrantRole, canManageUsers, getVisibleUserIds, isSupervisorRole } from "@/lib/permissions";
 import { deleteObject } from "@/lib/attachments/storage";
 
 export { LeaveError };
@@ -17,36 +17,198 @@ export function requireHr(user: SessionUser): void {
 
 /* ------------------------------- Overview -------------------------------- */
 
+const DAY_MS = 24 * 60 * 60 * 1000;
+
+/** Active employees (within the actor's visibility scope) with an incomplete profile. */
+export async function usersWithMissingInfo(user: SessionUser): Promise<{ id: string; name: string; missing: string[] }[]> {
+  requireHr(user);
+  const companyId = user.companyId!;
+  const visible = await getVisibleUserIds(user);
+  const rows = await prisma.user.findMany({
+    where: {
+      companyId,
+      status: "ACTIVE",
+      ...(visible === "all" ? {} : { id: { in: visible } }),
+    },
+    select: { id: true, name: true, managerId: true, title: true },
+    orderBy: { name: "asc" },
+  });
+  const flagged: { id: string; name: string; missing: string[] }[] = [];
+  for (const row of rows) {
+    const missing: string[] = [];
+    if (!row.managerId) missing.push("manager");
+    if (!row.title) missing.push("title");
+    if (missing.length > 0) flagged.push({ id: row.id, name: row.name, missing });
+  }
+  return flagged;
+}
+
+export interface BalanceIssueRow {
+  balanceId: string | null;
+  userId: string;
+  userName: string;
+  leaveType: string;
+  periodStart: string;
+  available: number;
+  reason: "negative" | "inconsistent";
+}
+
+/**
+ * Current-period balances that violate the ledger's own invariants:
+ * - negative: the balance is below zero (cannot be carried on current accrual rules)
+ * - inconsistent: used or pending counters contradict their accumulators (< 0)
+ * Scoped to the actor's visible users; same source used by the admin overview and
+ * the filtered balances page so the dashboard count always matches the results.
+ */
+export async function balanceIssueRows(user: SessionUser): Promise<BalanceIssueRow[]> {
+  requireHr(user);
+  const companyId = user.companyId!;
+  await syncCurrentAccruals(prisma, companyId);
+  const today = new Date().toISOString().slice(0, 10);
+  const visible = await getVisibleUserIds(user);
+  const balances = await prisma.leaveBalance.findMany({
+    where: {
+      companyId,
+      periodStart: { lte: today },
+      periodEnd: { gte: today },
+      ...(visible === "all" ? {} : { userId: { in: visible } }),
+    },
+    include: { user: { select: { id: true, name: true } }, leaveType: { select: { name: true } } },
+    orderBy: { user: { name: "asc" } },
+  });
+  const rows: BalanceIssueRow[] = [];
+  for (const b of balances) {
+    const available = b.accrued + b.carriedOver + b.adjustment - b.used - b.pending;
+    if (available < -0.005) {
+      rows.push({
+        balanceId: b.id,
+        userId: b.user.id,
+        userName: b.user.name,
+        leaveType: b.leaveType.name,
+        periodStart: b.periodStart,
+        available,
+        reason: "negative",
+      });
+    }
+    if (b.used < -0.005 || b.pending < -0.005) {
+      rows.push({
+        balanceId: b.id,
+        userId: b.user.id,
+        userName: b.user.name,
+        leaveType: b.leaveType.name,
+        periodStart: b.periodStart,
+        available,
+        reason: "inconsistent",
+      });
+    }
+  }
+  return rows.sort((a, b) => a.userName.localeCompare(b.userName));
+}
+
 export async function adminStats(user: SessionUser) {
   requireHr(user);
   const companyId = user.companyId!;
   // Reconcile current-year rows to the cumulative accrual before reporting.
   await syncCurrentAccruals(prisma, companyId);
   const today = new Date().toISOString().slice(0, 10);
-  const [activeUsers, pendingRequests, departments, leaveTypes, delegations, balances, upcoming] =
-    await Promise.all([
-      prisma.user.count({ where: { companyId, status: "ACTIVE" } }),
-      prisma.leaveRequest.count({ where: { companyId, status: "PENDING" } }),
-      prisma.department.count({ where: { companyId } }),
-      prisma.leaveType.count({ where: { companyId } }),
-      prisma.approvalDelegation.count({ where: { companyId, active: true } }),
-      prisma.leaveBalance.findMany({
-        where: { companyId, periodStart: { lte: today }, periodEnd: { gte: today } },
-        include: { user: { select: { name: true } }, leaveType: { select: { name: true } } },
-      }),
-      prisma.leaveRequest.count({
-        where: {
-          companyId,
-          status: { in: ["PENDING", "APPROVED"] },
-          startDate: { gte: today },
-        },
-      }),
-    ]);
+  const [
+    activeUsers,
+    departments,
+    leaveTypes,
+    delegations,
+    balances,
+    upcoming,
+    statusCounts,
+    onboardingCount,
+    pendingRequests,
+    missingInfo,
+    balanceIssue,
+  ] = await Promise.all([
+    prisma.user.count({ where: { companyId, status: "ACTIVE" } }),
+    prisma.department.count({ where: { companyId } }),
+    prisma.leaveType.count({ where: { companyId } }),
+    prisma.approvalDelegation.count({ where: { companyId, active: true } }),
+    prisma.leaveBalance.findMany({
+      where: { companyId, periodStart: { lte: today }, periodEnd: { gte: today } },
+      include: { user: { select: { id: true, name: true } }, leaveType: { select: { id: true, name: true } } },
+    }),
+    prisma.leaveRequest.count({
+      where: {
+        companyId,
+        status: { in: ["PENDING", "APPROVED"] },
+        startDate: { gte: today },
+      },
+    }),
+    prisma.user.groupBy({
+      by: ["status"],
+      where: { companyId },
+      _count: { _all: true },
+    }),
+    // New hires whose employment has not started yet are "onboarding".
+    prisma.user.count({
+      where: { companyId, status: "ACTIVE", employmentStartDate: { gt: today } },
+    }),
+    // Same source as the /approvals page so the dashboard count always matches it.
+    listPendingForApproval(user),
+    usersWithMissingInfo(user),
+    balanceIssueRows(user),
+  ]);
+
+  const statusOf = new Map(statusCounts.map((s: (typeof statusCounts)[number]) => [s.status, s._count._all]));
+  const totalEmployees = [...statusOf.values()].reduce((s, n) => s + n, 0);
+  const inactive = statusOf.get("INACTIVE") ?? 0;
+  const offboarding = statusOf.get("OFFBOARDED") ?? 0;
+  const onboarding = onboardingCount;
+  const active = activeUsers - onboarding;
+
   const available = balances.reduce(
     (s: number, b: (typeof balances)[number]) => s + (b.accrued + b.carriedOver + b.adjustment - b.used - b.pending),
     0,
   );
-  return { activeUsers, pendingRequests, departments, leaveTypes, delegations, available, upcoming };
+  const balanceIssues = balanceIssue.length;
+  const balanceEmployees = new Set(balances.map((b: (typeof balances)[number]) => b.user.id)).size;
+  const byType = new Map<string, { name: string; available: number; used: number; pending: number; employees: Set<string> }>();
+  for (const b of balances) {
+    let entry = byType.get(b.leaveType.id);
+    if (!entry) {
+      entry = { name: b.leaveType.name, available: 0, used: 0, pending: 0, employees: new Set() };
+      byType.set(b.leaveType.id, entry);
+    }
+    entry.available += b.accrued + b.carriedOver + b.adjustment - b.used - b.pending;
+    entry.used += b.used;
+    entry.pending += b.pending;
+    entry.employees.add(b.user.id);
+  }
+  const balanceTotals = [...byType.values()]
+    .map((e) => ({ name: e.name, available: e.available, used: e.used, pending: e.pending, employees: e.employees.size }))
+    .sort((a, b) => a.name.localeCompare(b.name));
+
+  const now = Date.now();
+  const olderThan3 = pendingRequests.filter((r: (typeof pendingRequests)[number]) => now - r.createdAt.getTime() > 3 * DAY_MS).length;
+  const olderThan7 = pendingRequests.filter((r: (typeof pendingRequests)[number]) => now - r.createdAt.getTime() > 7 * DAY_MS).length;
+
+  return {
+    activeUsers,
+    pendingRequests: pendingRequests.length,
+    pendingApprovals: { total: pendingRequests.length, olderThan3, olderThan7 },
+    departments,
+    leaveTypes,
+    delegations,
+    available,
+    upcoming,
+    totalEmployees,
+    employeeStatus: { active, onboarding, offboarding, inactive },
+    missingInfo: { total: missingInfo.length, users: missingInfo },
+    balanceIssues,
+    balanceIssue: {
+      total: new Set(balanceIssue.map((r: BalanceIssueRow) => r.balanceId)).size,
+      negative: balanceIssue.filter((r: BalanceIssueRow) => r.reason === "negative").length,
+      inconsistent: balanceIssue.filter((r: BalanceIssueRow) => r.reason === "inconsistent").length,
+      rows: balanceIssue,
+    },
+    balanceEmployees,
+    balanceTotals,
+  };
 }
 
 /* --------------------------------- Users --------------------------------- */
@@ -166,6 +328,8 @@ export async function createUserForAdmin(user: SessionUser, input: CreateUserInp
       action: "user.create",
       entityType: "User",
       entityId: createdUser.id,
+      entityName: createdUser.name,
+      employeeId: createdUser.id,
       after: { email, role: input.role, departmentId: input.departmentId },
     });
     return createdUser;
@@ -231,6 +395,8 @@ export async function updateUserForAdmin(user: SessionUser, userId: string, inpu
     action: "user.update",
     entityType: "User",
     entityId: userId,
+    entityName: target.name,
+    employeeId: userId,
     before,
     after: {
       role: updated.role,
@@ -291,6 +457,8 @@ export async function deleteUserForAdmin(user: SessionUser, userId: string) {
       action: "user.delete",
       entityType: "User",
       entityId: userId,
+      entityName: target.name,
+      employeeId: userId,
       before: { name: target.name, email: target.email, role: target.role, status: target.status },
       after: { deleted: true },
     });
@@ -351,6 +519,7 @@ export async function createDepartmentForAdmin(user: SessionUser, name: string, 
     action: "department.create",
     entityType: "Department",
     entityId: created.id,
+    entityName: created.name,
     after: { name: created.name, code: created.code },
   });
   return created;
@@ -373,6 +542,7 @@ export async function renameDepartmentForAdmin(user: SessionUser, departmentId: 
     action: "department.rename",
     entityType: "Department",
     entityId: departmentId,
+    entityName: updated.name,
     before: { name: target.name },
     after: { name: updated.name },
   });
@@ -409,6 +579,7 @@ export async function deleteDepartmentForAdmin(user: SessionUser, departmentId: 
       action: "department.delete",
       entityType: "Department",
       entityId: departmentId,
+      entityName: target.name,
       before: { name: target.name, code: target.code },
     });
   });
@@ -477,6 +648,7 @@ export async function createLeaveTypeForAdmin(user: SessionUser, input: CreateLe
     action: "leaveType.create",
     entityType: "LeaveType",
     entityId: created.id,
+    entityName: created.name,
     after: { name: created.name, unit: created.unit },
   });
   return created;
@@ -542,6 +714,7 @@ export async function updatePolicyForAdmin(user: SessionUser, policyId: string, 
     action: "leavePolicy.update",
     entityType: "LeavePolicy",
     entityId: policyId,
+    entityName: policy.name,
     before,
     after: {
       annualAllotment: updated.annualAllotment,
@@ -579,6 +752,7 @@ export async function archiveLeaveTypeForAdmin(user: SessionUser, leaveTypeId: s
     action: "leaveType.archive",
     entityType: "LeaveType",
     entityId: leaveTypeId,
+    entityName: target.name,
     before: { isArchived: false },
     after: { isArchived: true },
   });
@@ -600,6 +774,7 @@ export async function reactivateLeaveTypeForAdmin(user: SessionUser, leaveTypeId
     action: "leaveType.reactivate",
     entityType: "LeaveType",
     entityId: leaveTypeId,
+    entityName: target.name,
     before: { isArchived: true },
     after: { isArchived: false },
   });
@@ -634,6 +809,7 @@ export async function deleteLeaveTypeForAdmin(user: SessionUser, leaveTypeId: st
       action: "leaveType.delete",
       entityType: "LeaveType",
       entityId: leaveTypeId,
+      entityName: target.name,
       before: { name: target.name },
     });
   });
@@ -758,9 +934,11 @@ export async function adjustBalanceForAdmin(
     action: "balance.adjust",
     entityType: "LeaveBalance",
     entityId: balance.id,
+    entityName: balance.user.name,
+    employeeId: balance.userId,
     before: { adjustment: balance.adjustment },
     after: { adjustment: updated.adjustment },
-    metadata: { delta: input.delta, reason: input.reason },
+    metadata: { delta: input.delta, reason: input.reason, leaveType: balance.leaveType.name },
   });
   return updated;
 }

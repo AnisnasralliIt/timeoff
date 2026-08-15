@@ -384,10 +384,18 @@ model Notification {
 model AuditLog {
   id         String   @id @default(cuid())
   companyId  String
-  actorId    String? // null = system
+  actorId    String? // null = system/background
+  // Immutable display snapshots so the trail stays readable after the
+  // referenced user/entity is deleted. Never store credentials.
+  actorNameSnapshot String? // actor display name at the time of the event
   action     String // e.g. "leaveRequest.create", "balance.adjust", "user.offboard"
   entityType String
   entityId   String?
+  entityNameSnapshot String? // affected entity display name (survives deletion)
+  // The employee the event is ABOUT. Drives manager-scoped visibility
+  // (WHERE employeeId IN (manager's authorized team)); null for company-wide
+  // or system events that do not concern a specific employee.
+  employeeId String?
   before     Json?
   after      Json?
   metadata   Json?
@@ -398,6 +406,10 @@ model AuditLog {
   actor   User?   @relation(fields: [actorId], references: [id])
 
   @@index([companyId, entityType, entityId])
+  @@index([companyId, createdAt])
+  @@index([companyId, employeeId, createdAt])
+  @@index([actorId])
+  @@index([action])
   @@index([createdAt])
 }
 

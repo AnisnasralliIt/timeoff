@@ -10,6 +10,7 @@ import {
   type CalendarLeave,
 } from "@/lib/calendar-shared";
 import { LeaveBar } from "@/components/calendar/leave-bar";
+import { CalendarLegend } from "@/components/calendar/calendar-legend";
 
 interface MonthViewProps {
   requests: CalendarLeave[];
@@ -102,15 +103,27 @@ export function MonthView({ requests, holidays, year, month }: MonthViewProps) {
           <div key={wi} className="relative grid grid-cols-7 border-b border-border last:border-b-0">
             {week.map((day: string | null, ci: number) => {
               const isToday = day === today;
-              const muted = day !== null && (isWeekendDay(day) || holidays.includes(day));
+              const isHoliday = day !== null && holidays.includes(day);
+              const isWeekend = day !== null && isWeekendDay(day);
               return (
                 <div
                   key={day ?? ci}
+                  title={isHoliday ? t("holidayDay") : undefined}
                   className={cn(
-                    "h-28 border-r border-border p-1 text-right last:border-r-0",
-                    muted && "bg-muted/30"
+                    "relative h-28 border-r border-border p-1 text-right last:border-r-0",
+                    isToday
+                      ? "bg-primary/5"
+                      : isHoliday
+                        ? "bg-warning/10"
+                        : isWeekend && "bg-muted/30"
                   )}
                 >
+                  {isHoliday ? (
+                    <span
+                      aria-hidden
+                      className="absolute left-1.5 top-1.5 size-1.5 rounded-full bg-warning"
+                    />
+                  ) : null}
                   {day ? (
                     <span
                       className={cn(
@@ -143,6 +156,9 @@ export function MonthView({ requests, holidays, year, month }: MonthViewProps) {
       {!hasLeaveInMonth ? (
         <p className="px-1 pt-3 text-sm text-muted-foreground">{t("quietMonthShort")}</p>
       ) : null}
+      <div className="mt-3 flex justify-center border-t border-border pt-3">
+        <CalendarLegend requests={requests} />
+      </div>
     </div>
   );
 }

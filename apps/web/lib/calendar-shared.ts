@@ -95,6 +95,51 @@ export function leaveSegments(leave: CalendarLeave, days: string[]): BarSegment[
   return segments;
 }
 
+/** A single absence as the input to staffing-overlap analysis. */
+export interface AbsenceSpan {
+  userId: string;
+  startDate: string;
+  endDate: string;
+  departmentName: string;
+}
+
+/** A day on which `count` employees of one department are absent together. */
+export interface StaffingWarning {
+  departmentName: string;
+  date: string;
+  count: number;
+}
+
+/**
+ * Find days where several employees of the same department are absent at the
+ * same time, within the given day window. Distinct employees are counted per
+ * department per day; days reaching `minCount` (default 3) become warnings,
+ * sorted most-staffed first. Client-safe pure function.
+ */
+export function staffingWarnings(
+  absences: AbsenceSpan[],
+  days: string[],
+  minCount = 3,
+): StaffingWarning[] {
+  const warnings: StaffingWarning[] = [];
+  for (const day of days) {
+    const byDepartment = new Map<string, Set<string>>();
+    for (const a of absences) {
+      if (a.startDate <= day && a.endDate >= day) {
+        const users = byDepartment.get(a.departmentName) ?? new Set<string>();
+        users.add(a.userId);
+        byDepartment.set(a.departmentName, users);
+      }
+    }
+    for (const [departmentName, users] of byDepartment) {
+      if (users.size >= minCount) warnings.push({ departmentName, date: day, count: users.size });
+    }
+  }
+  return warnings.sort(
+    (a: StaffingWarning, b: StaffingWarning) => b.count - a.count || a.date.localeCompare(b.date),
+  );
+}
+
 /** Humanized scope label used in export filenames (slugified, safe for paths). */
 export function slugify(value: string): string {
   return value

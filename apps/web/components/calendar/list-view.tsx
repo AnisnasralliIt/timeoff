@@ -75,12 +75,12 @@ export function ListView({ requests, holidays, from, to }: ListViewProps) {
               <span
                 className={cn(
                   "w-36 shrink-0 font-medium text-foreground",
-                  (isWeekendDay(day) || holidays.includes(day)) && "text-muted-foreground"
+                  holidays.includes(day) ? "text-warning" : isWeekendDay(day) && "text-muted-foreground"
                 )}
               >
                 {shortDate(day, locale)}
                 {holidays.includes(day) ? (
-                  <span className="ml-1 rounded bg-muted px-1 text-[10px] uppercase tracking-wide text-muted-foreground">
+                  <span className="ml-1 rounded bg-warning/10 px-1 text-[10px] uppercase tracking-wide text-warning">
                     {t("holiday")}
                   </span>
                 ) : null}

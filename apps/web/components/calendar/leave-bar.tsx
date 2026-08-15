@@ -60,10 +60,10 @@ export function LeaveBar({
         >
           <span
             className={cn(
-              "flex h-full w-full items-end overflow-hidden rounded-sm border",
-              pending && "opacity-60"
+              "relative flex h-full w-full items-end overflow-hidden rounded-sm border",
+              pending && "opacity-70"
             )}
-            style={{ borderColor: "rgba(255,255,255,0.25)" }}
+            style={{ borderColor: pending ? "rgba(255,255,255,0.25)" : "rgba(255,255,255,0.45)" }}
           >
             {segs.map((seg: BarSegment, i: number) => (
               <span
@@ -72,6 +72,16 @@ export function LeaveBar({
                 style={{ background: leave.leaveTypeColor }}
               />
             ))}
+            {pending ? (
+              <span
+                className="pointer-events-none absolute inset-0"
+                style={{
+                  backgroundImage:
+                    "repeating-linear-gradient(45deg, transparent 0 4px, rgba(0,0,0,0.25) 4px 8px)",
+                }}
+                aria-hidden
+              />
+            ) : null}
           </span>
           {showLabel && span * dayWidth >= 52 ? (
             <span className="absolute inset-y-0 left-1 flex items-center text-[10px] font-medium leading-none text-white drop-shadow-sm">

@@ -2,8 +2,8 @@
 
 import * as React from "react";
 import { useLocale, useTranslations } from "next-intl";
-import { ChevronLeft, ChevronRight, RefreshCw, X } from "lucide-react";
-import { Button, Checkbox, DateRangePicker, toISODate, fromISODate, cn } from "@timeoff/ui";
+import { ChevronLeft, ChevronRight, RefreshCw, Search, X } from "lucide-react";
+import { Button, DateRangePicker, toISODate, fromISODate, cn } from "@timeoff/ui";
 import { addDaysISO, diffInDays, todayISO } from "@timeoff/domain";
 import type {
   CalendarLeave,
@@ -112,7 +112,8 @@ export function CalendarExplorer({
 
   const [view, setView] = React.useState<ViewMode>("month");
   const [range, setRange] = React.useState(() => monthRangeOf(todayISO()));
-  const [includePending, setIncludePending] = React.useState(false);
+  const [statusFilter, setStatusFilter] = React.useState<"all" | "approved" | "pending">("all");
+  const [search, setSearch] = React.useState("");
   const [leaveTypeId, setLeaveTypeId] = React.useState("");
   const [departmentId, setDepartmentId] = React.useState("");
   const [data, setData] = React.useState<CalendarData | null>(null);
@@ -123,7 +124,12 @@ export function CalendarExplorer({
 
   const from = range.from;
   const to = range.to;
-  const statuses: RequestStatus[] = includePending ? ["APPROVED", "PENDING"] : ["APPROVED"];
+  const statuses: RequestStatus[] =
+    statusFilter === "approved"
+      ? ["APPROVED"]
+      : statusFilter === "pending"
+        ? ["PENDING"]
+        : ["APPROVED", "PENDING"];
   const statusKey = statuses.join(",");
 
   React.useEffect(() => {
@@ -185,8 +191,17 @@ export function CalendarExplorer({
     statuses,
   };
 
-  const requests = data?.requests ?? [];
+  const allRequests = data?.requests ?? [];
+  const allRoster = data?.roster ?? [];
   const holidays = data?.holidays ?? [];
+
+  const query = search.trim().toLocaleLowerCase();
+  const requests = query
+    ? allRequests.filter((r: CalendarLeave) => r.userName.toLocaleLowerCase().includes(query))
+    : allRequests;
+  const roster = query
+    ? allRoster.filter((m: CalendarRosterMember) => m.name.toLocaleLowerCase().includes(query))
+    : allRoster;
 
   return (
     <div className="space-y-3">
@@ -300,14 +315,6 @@ export function CalendarExplorer({
         <span className="text-sm font-medium tabular-nums text-foreground">{rangeLabel}</span>
 
         <div className="ml-auto flex flex-wrap items-center gap-3">
-          <label className="flex cursor-pointer items-center gap-1.5 text-sm text-muted-foreground">
-            <Checkbox
-              checked={includePending}
-              onCheckedChange={(v) => setIncludePending(v === true)}
-              id="include-pending"
-            />
-            <span className="select-none">{t("includePending")}</span>
-          </label>
           <Button
             type="button"
             variant="ghost"
@@ -352,6 +359,37 @@ export function CalendarExplorer({
             ))}
           </select>
         ) : null}
+        <select
+          value={statusFilter}
+          onChange={(e) => setStatusFilter(e.target.value as "all" | "approved" | "pending")}
+          className="h-9 rounded-md border border-input bg-card px-3 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          aria-label={t("statusFilter")}
+        >
+          <option value="all">{t("statusAll")}</option>
+          <option value="approved">{t("statusApproved")}</option>
+          <option value="pending">{t("statusPending")}</option>
+        </select>
+        <div className="relative">
+          <Search className="pointer-events-none absolute left-2.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+          <input
+            type="text"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder={t("searchEmployees")}
+            aria-label={t("searchEmployees")}
+            className="h-9 w-52 rounded-md border border-input bg-card pl-8 pr-8 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          />
+          {search ? (
+            <button
+              type="button"
+              aria-label={t("clearSearch")}
+              onClick={() => setSearch("")}
+              className="absolute right-1.5 top-1/2 -translate-y-1/2 rounded-sm p-1 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+            >
+              <X className="size-3.5" />
+            </button>
+          ) : null}
+        </div>
         {!loading && data ? (
           <span className="text-xs text-muted-foreground">
             {t("showingCount", { count: requests.length })}
@@ -381,7 +419,7 @@ export function CalendarExplorer({
           ) : (
             <TeamView
               requests={requests}
-              roster={data.roster}
+              roster={roster}
               holidays={holidays}
               from={from}
               to={to}

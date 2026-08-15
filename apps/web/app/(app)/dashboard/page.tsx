@@ -5,8 +5,9 @@ import { getTranslations } from "next-intl/server";
 import { prisma } from "@timeoff/db";
 import { availableBalance, todayISO } from "@timeoff/domain";
 import { requireAuth } from "@/lib/session";
-import { listPendingForApproval, syncCurrentAccruals } from "@/lib/services/leave";
+import { balanceHistoryFor, listPendingForApproval, syncCurrentAccruals } from "@/lib/services/leave";
 import { Badge, BalanceRing, Button, Card, CardContent, CardDescription, CardHeader, CardTitle, statusVariant, type BadgeProps } from "@timeoff/ui";
+import { BalanceHistory } from "@/components/balance-history";
 
 export async function generateMetadata(): Promise<Metadata> {
   const t = await getTranslations("metadata");
@@ -30,10 +31,11 @@ export default async function DashboardPage() {
   const user = await requireAuth();
   const today = todayISO();
   const t = await getTranslations("dashboard");
+  const tHistory = await getTranslations("balanceHistory");
   const tStatus = await getTranslations("status");
   const tCommon = await getTranslations("common");
 
-  const [balances, recent, upcoming] = await Promise.all([
+  const [balances, recent, upcoming, history, historyLimit] = await Promise.all([
     (async () => {
       // Same reconciliation the admin views use: current-year `accrued` keeps
       // growing month over month and `carriedOver` reflects the corrected
@@ -57,6 +59,16 @@ export default async function DashboardPage() {
       orderBy: { startDate: "asc" },
       take: 4,
     }),
+    balanceHistoryFor(user, user.id),
+    (async () => {
+      const vacation = await prisma.leaveType.findFirst({ where: { companyId: user.companyId, name: "Vacation" } });
+      if (!vacation) return null;
+      const policy = await prisma.leavePolicy.findFirst({
+        where: { companyId: user.companyId, leaveTypeId: vacation.id, annualAllotment: { gt: 0 }, departmentId: null },
+        select: { carryOverDays: true },
+      });
+      return policy?.carryOverDays ?? null;
+    })(),
   ]);
 
   const showApprovals = user.role !== "EMPLOYEE";
@@ -224,6 +236,19 @@ export default async function DashboardPage() {
           </CardContent>
         </Card>
       </div>
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <CalendarClock className="size-4 text-muted-foreground" />
+            {tHistory("title")}
+          </CardTitle>
+          <CardDescription>{tHistory("subtitle")}</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <BalanceHistory years={history} carryOverLimit={historyLimit} />
+        </CardContent>
+      </Card>
     </div>
   );
 }

@@ -7,6 +7,7 @@ import {
   Settings,
   Users,
   Palette,
+  History,
   type LucideIcon,
 } from "lucide-react";
 
@@ -16,7 +17,7 @@ export type NavItem = {
   href: string;
   icon: LucideIcon;
   /** Role-gated; `undefined` means visible to all authenticated users. */
-  minRole?: "approver" | "insights" | "people-ops" | "super-admin";
+  minRole?: "approver" | "insights" | "people-ops" | "super-admin" | "audit";
   badge?: number;
 };
 
@@ -47,6 +48,7 @@ export const navSections: NavSection[] = [
     titleKey: "manage",
     items: [
       { labelKey: "admin", href: "/admin", icon: Settings, minRole: "people-ops" },
+      { labelKey: "auditLog", href: "/admin/audit-log", icon: History, minRole: "audit" },
       { labelKey: "styleGuide", href: "/style-guide", icon: Palette, minRole: "super-admin" },
     ],
   },

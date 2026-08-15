@@ -34,9 +34,11 @@ export interface ShellUser {
 /** Role gates per nav minRole key. SUPER_ADMIN passes everything. */
 const ROLE_GATES: Record<NonNullable<import("./nav").NavItem["minRole"]>, (role?: string) => boolean> = {
   approver: (role) => role === "MANAGER" || role === "HR" || role === "ADMIN" || role === "SUPER_ADMIN",
-  insights: (role) => role === "EXECUTIVE" || role === "HR" || role === "ADMIN" || role === "SUPER_ADMIN",
+  insights: (role) =>
+    role === "EXECUTIVE" || role === "HR" || role === "ADMIN" || role === "SUPER_ADMIN" || role === "MANAGER",
   "people-ops": (role) => role === "HR" || role === "ADMIN" || role === "SUPER_ADMIN",
   "super-admin": (role) => role === "SUPER_ADMIN",
+  audit: (role) => role === "MANAGER" || role === "HR" || role === "ADMIN" || role === "SUPER_ADMIN",
 };
 
 function roleAllowed(user: ShellUser, minRole: NonNullable<import("./nav").NavItem["minRole"]>): boolean {

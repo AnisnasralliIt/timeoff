@@ -34,10 +34,13 @@ export function CreateUserDialog({
   departments,
   managers,
   canGrantAdmin,
+  defaultOpen = false,
 }: {
   departments: Dept[];
   managers: Manager[];
   canGrantAdmin: boolean;
+  /** Opens the dialog without a trigger click (used by deep links like /admin/users?new=1). */
+  defaultOpen?: boolean;
 }) {
   const t = useTranslations("adminDialogs.createUser");
   const tCommon = useTranslations("common");
@@ -52,7 +55,7 @@ export function CreateUserDialog({
   const [confirm, setConfirm] = useState("");
 
   return (
-    <Dialog>
+    <Dialog defaultOpen={defaultOpen}>
       <DialogTrigger asChild>
         <Button>
           <UserPlus className="size-4" />
