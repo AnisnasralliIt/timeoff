@@ -5,6 +5,7 @@ import { requireAuth } from "@/lib/session";
 import {
   createUserForAdmin,
   updateUserForAdmin,
+  changeUserPasswordForAdmin,
   deleteUserForAdmin,
   createDepartmentForAdmin,
   renameDepartmentForAdmin,
@@ -21,7 +22,14 @@ import { toErrorState, type ServerErrorShape } from "@/lib/errors";
 
 export interface ActionState extends ServerErrorShape {
   ok?: boolean;
-  saved?: { countWeekendsWithinSpan: boolean; extendWeekendAfterFriday: boolean };
+  saved?: {
+    countWeekendsWithinSpan: boolean;
+    extendWeekendAfterFriday: boolean;
+    countHolidaysAsVacationDays: boolean;
+    halfDayEnabled: boolean;
+    halfDayStartDay: boolean;
+    halfDayEndDay: boolean;
+  };
 }
 
 const ADMIN_PATHS = [
@@ -101,6 +109,26 @@ export async function deleteUserAction(
   const user = await requireAuth();
   try {
     await deleteUserForAdmin(user, userId);
+    revalidateAdmin();
+    return { ok: true };
+  } catch (error) {
+    return toErrorState(error);
+  }
+}
+
+export async function changeUserPasswordAction(
+  userId: string,
+  _prev: ActionState,
+  formData: FormData,
+): Promise<ActionState> {
+  const user = await requireAuth();
+  const password = String(formData.get("password") ?? "");
+  const confirm = String(formData.get("confirm") ?? "");
+  if (!password || password !== confirm) {
+    return { errorCode: "passwordMismatch", error: "Passwords do not match." };
+  }
+  try {
+    await changeUserPasswordForAdmin(user, userId, { password });
     revalidateAdmin();
     return { ok: true };
   } catch (error) {
@@ -268,10 +296,31 @@ export async function updateCompanySettingsAction(
   const user = await requireAuth();
   const countWeekendsWithinSpan = formData.get("countWeekendsWithinSpan") === "on";
   const extendWeekendAfterFriday = formData.get("extendWeekendAfterFriday") === "on";
+  const countHolidaysAsVacationDays = formData.get("countHolidaysAsVacationDays") === "on";
+  const halfDayEnabled = formData.get("halfDayEnabled") === "on";
+  const halfDayStartDay = formData.get("halfDayStartDay") === "on";
+  const halfDayEndDay = formData.get("halfDayEndDay") === "on";
   try {
-    await updateCompanySettingsForAdmin(user, { countWeekendsWithinSpan, extendWeekendAfterFriday });
+    await updateCompanySettingsForAdmin(user, {
+      countWeekendsWithinSpan,
+      extendWeekendAfterFriday,
+      countHolidaysAsVacationDays,
+      halfDayEnabled,
+      halfDayStartDay,
+      halfDayEndDay,
+    });
     revalidateAdmin();
-    return { ok: true, saved: { countWeekendsWithinSpan, extendWeekendAfterFriday } };
+    return {
+      ok: true,
+      saved: {
+        countWeekendsWithinSpan,
+        extendWeekendAfterFriday,
+        countHolidaysAsVacationDays,
+        halfDayEnabled,
+        halfDayStartDay,
+        halfDayEndDay,
+      },
+    };
   } catch (error) {
     return toErrorState(error);
   }

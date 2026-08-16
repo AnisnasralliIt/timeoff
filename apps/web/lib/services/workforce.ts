@@ -1,8 +1,9 @@
 import { prisma } from "@timeoff/db";
-import { addDaysISO, leaveYearRange, todayISO } from "@timeoff/domain";
+import { addDaysISO, authorisationPeriod, availableAuthorisationHours, leaveYearRange, todayISO } from "@timeoff/domain";
 import type { SessionUser } from "@/lib/session";
 import { getVisibleUserIds, getUserScope, resolveDepartmentId } from "@/lib/permissions";
 import { listPendingForApproval, syncCurrentAccruals } from "@/lib/services/leave";
+import { getAuthorisationPolicy } from "@/lib/services/authorisations";
 
 /**
  * A vacation balance below this many days counts as "low" on the workforce
@@ -279,6 +280,151 @@ export async function workforceStats(user: SessionUser, filters: WorkforceFilter
   }
   const monthlyUtilization = monthKeys.map((key) => ({ key, days: byMonth.get(key) ?? 0 }));
 
+  // Authorisation insights — computed ONLY when the module is enabled (no
+  // extra queries otherwise), scoped exactly like every other query here.
+  const authorisationPolicy = await getAuthorisationPolicy(prisma, companyId);
+  const authEnabled = authorisationPolicy?.enabled === true;
+  let authorisations: {
+    enabled: boolean;
+    month: string;
+    used: number;
+    pending: number;
+    granted: number;
+    carriedOver: number;
+    adjustment: number;
+    remaining: number;
+    employeesUsing: number;
+    averageHours: number;
+    byDepartment: {
+      id: string;
+      name: string;
+      granted: number;
+      used: number;
+      pending: number;
+      remaining: number;
+      employees: number;
+    }[];
+  } | null = null;
+  if (authEnabled) {
+    const month = authorisationPeriod(today);
+    const [authBalances, authUsedRequests] = await Promise.all([
+      prisma.authorisationBalance.findMany({
+        where: {
+          companyId,
+          period: month,
+          user: {
+            status: "ACTIVE",
+            ...userWhere,
+            ...(departmentFilter ? { departmentId: departmentFilter } : {}),
+          },
+        },
+        include: {
+          user: { select: { id: true, departmentId: true, department: { select: { name: true } } } },
+        },
+      }),
+      prisma.authorisationRequest.findMany({
+        where: {
+          companyId,
+          status: "APPROVED",
+          date: { startsWith: month },
+          ...(visible === "all" ? {} : { userId: { in: visible } }),
+          ...(departmentFilter ? { user: { departmentId: departmentFilter } } : {}),
+        },
+        select: {
+          userId: true,
+          hours: true,
+          user: { select: { departmentId: true } },
+        },
+      }),
+    ]);
+
+    const usedThisMonth = authUsedRequests.reduce(
+      (sum: number, r: (typeof authUsedRequests)[number]) => sum + r.hours,
+      0,
+    );
+    const employeesUsing = new Set(authUsedRequests.map((r) => r.userId)).size;
+    const granted = authBalances.reduce(
+      (sum: number, b: (typeof authBalances)[number]) => sum + b.granted,
+      0,
+    );
+    const carriedOver = authBalances.reduce(
+      (sum: number, b: (typeof authBalances)[number]) => sum + b.carriedOver,
+      0,
+    );
+    const adjustment = authBalances.reduce(
+      (sum: number, b: (typeof authBalances)[number]) => sum + b.adjustment,
+      0,
+    );
+    const used = authBalances.reduce(
+      (sum: number, b: (typeof authBalances)[number]) => sum + b.used,
+      0,
+    );
+    const pending = authBalances.reduce(
+      (sum: number, b: (typeof authBalances)[number]) => sum + b.pending,
+      0,
+    );
+    const remaining = authBalances.reduce(
+      (sum: number, b: (typeof authBalances)[number]) =>
+        sum + availableAuthorisationHours(b),
+      0,
+    );
+
+    const deptMap = new Map<
+      string,
+      {
+        id: string;
+        name: string;
+        granted: number;
+        used: number;
+        pending: number;
+        remaining: number;
+        employees: Set<string>;
+      }
+    >();
+    for (const b of authBalances) {
+      const key = b.user.departmentId ?? "";
+      const entry = deptMap.get(key) ?? {
+        id: key,
+        name: b.user.department?.name ?? "—",
+        granted: 0,
+        used: 0,
+        pending: 0,
+        remaining: 0,
+        employees: new Set<string>(),
+      };
+      entry.granted += b.granted;
+      entry.used += b.used;
+      entry.pending += b.pending;
+      entry.remaining += availableAuthorisationHours(b);
+      deptMap.set(key, entry);
+    }
+    for (const r of authUsedRequests) {
+      const key = r.user.departmentId ?? "";
+      const entry = deptMap.get(key);
+      if (entry) entry.employees.add(r.userId);
+    }
+    const byDepartment = [...deptMap.values()]
+      .map((d) => ({ ...d, employees: d.employees.size }))
+      .sort(
+        (a: { used: number; name: string }, b: { used: number; name: string }) =>
+          b.used - a.used || a.name.localeCompare(b.name),
+      );
+
+    authorisations = {
+      enabled: true,
+      month,
+      used,
+      pending,
+      granted,
+      carriedOver,
+      adjustment,
+      remaining,
+      employeesUsing,
+      averageHours: employeesUsing > 0 ? usedThisMonth / employeesUsing : 0,
+      byDepartment,
+    };
+  }
+
   // Leave-year options from real balance rows; the current year is always first.
   const periodRows = await prisma.leaveBalance.findMany({
     where: { companyId },
@@ -332,5 +478,6 @@ export async function workforceStats(user: SessionUser, filters: WorkforceFilter
       endDate: r.endDate,
     })),
     leaveYears,
+    authorisations,
   };
 }

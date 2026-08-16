@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useTranslations } from "next-intl";
-import { Users, Building2, Briefcase, Wallet, Gauge, Settings, History } from "lucide-react";
+import { Users, Building2, Briefcase, Wallet, Gauge, Settings, History, CalendarDays } from "lucide-react";
 import { cn } from "@timeoff/ui";
 import type { SessionUser } from "@/lib/session";
 
@@ -12,6 +12,7 @@ const tabs = [
   { href: "/admin/users", key: "users", icon: Users, minRole: ["HR", "ADMIN"] },
   { href: "/admin/departments", key: "departments", icon: Building2, minRole: ["HR", "ADMIN"] },
   { href: "/admin/leave-types", key: "leaveTypes", icon: Briefcase, minRole: ["HR", "ADMIN"] },
+  { href: "/admin/holidays", key: "holidays", icon: CalendarDays, minRole: ["HR", "ADMIN"] },
   { href: "/admin/balances", key: "balances", icon: Wallet, minRole: ["HR", "ADMIN"] },
   { href: "/admin/audit-log", key: "auditLog", icon: History, minRole: ["MANAGER", "HR", "ADMIN"] },
   { href: "/admin/settings", key: "settings", icon: Settings, minRole: ["HR", "ADMIN"] },

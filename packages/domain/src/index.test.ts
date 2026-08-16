@@ -32,6 +32,11 @@ import {
 const holidays: ReadonlySet<string> = new Set(["2025-05-01", "2025-12-25", "2025-12-26"]);
 const cal: CalendarOptions = { holidays };
 const half = (overrides: Partial<LeaveSpan> = {}): LeaveSpan => ({ startDate: "2025-05-05", endDate: "2025-05-09", ...overrides });
+// 2025-05-13 is a Tuesday; 2025-05-14 (Wed) and 2025-05-16 (Fri) are weekdays,
+// 2025-05-17 (Sat) / 2025-05-18 (Sun) are the weekend.
+const mayHoliday: ReadonlySet<string> = new Set(["2025-05-14"]); // single Wednesday holiday
+const mayHolidays: ReadonlySet<string> = new Set(["2025-05-14", "2025-05-16"]); // two holidays
+const weekendHoliday: ReadonlySet<string> = new Set(["2025-05-17"]); // Saturday
 
 describe("dates", () => {
   it("validates ISO dates strictly", () => {
@@ -113,6 +118,30 @@ describe("business-days", () => {
     const weekends = { holidays, countWeekendsWithinSpan: true };
     expect(listBusinessDays("2025-05-01", "2025-05-03", weekends)).toEqual(["2025-05-02", "2025-05-03"]);
   });
+
+  it("counts holidays as working days when countHolidaysAsVacationDays is set", () => {
+    const count = { holidays, countHolidaysAsVacationDays: true };
+    expect(isWorkingDay("2025-05-01", count)).toBe(true);
+    expect(listBusinessDays("2025-04-28", "2025-05-02", count)).toEqual([
+      "2025-04-28",
+      "2025-04-29",
+      "2025-04-30",
+      "2025-05-01",
+      "2025-05-02",
+    ]);
+  });
+
+  it("keeps weekends excluded even when holidays count", () => {
+    const count = { holidays, countHolidaysAsVacationDays: true };
+    expect(listBusinessDays("2025-05-01", "2025-05-05", count)).toEqual(["2025-05-01", "2025-05-02", "2025-05-05"]);
+  });
+
+  it("a holiday on a weekend always follows the weekend rule", () => {
+    const off = { holidays: weekendHoliday, countHolidaysAsVacationDays: true };
+    expect(isWorkingDay("2025-05-17", off)).toBe(false); // weekends stay excluded
+    const on = { holidays: weekendHoliday, countWeekendsWithinSpan: true };
+    expect(isWorkingDay("2025-05-17", on)).toBe(true); // counted as a weekend
+  });
 });
 
 describe("leave-days", () => {
@@ -150,9 +179,52 @@ describe("leave-days", () => {
     expect(computeLeaveDays(span, cal).totalDays).toBe(0.5);
   });
 
+  it("treats a single full day as one day", () => {
+    const span: LeaveSpan = { startDate: "2025-05-05", endDate: "2025-05-05" };
+    expect(computeLeaveDays(span, cal).totalDays).toBe(1);
+  });
+
+  it("treats a single morning and a single afternoon as half days", () => {
+    const morning: LeaveSpan = { startDate: "2025-05-05", endDate: "2025-05-05", startDayPart: "FIRST_HALF", endDayPart: "FIRST_HALF" };
+    const afternoon: LeaveSpan = { startDate: "2025-05-05", endDate: "2025-05-05", startDayPart: "SECOND_HALF", endDayPart: "SECOND_HALF" };
+    expect(computeLeaveDays(morning, cal).totalDays).toBe(0.5);
+    expect(computeLeaveDays(afternoon, cal).totalDays).toBe(0.5);
+  });
+
+  it("rejects a single-day second-half-to-first-half split with a clear message", () => {
+    const span: LeaveSpan = { startDate: "2025-05-05", endDate: "2025-05-05", startDayPart: "SECOND_HALF", endDayPart: "FIRST_HALF" };
+    expect(() => computeLeaveDays(span, cal)).toThrow("The end day part cannot be earlier than the start day part.");
+  });
+
   it("rejects splitting a single day into two half days", () => {
     const span: LeaveSpan = { startDate: "2025-05-05", endDate: "2025-05-05", startDayPart: "FIRST_HALF", endDayPart: "SECOND_HALF" };
     expect(() => computeLeaveDays(span, cal)).toThrow(LeaveSpanError);
+  });
+
+  it("applies a half-day start only across a week", () => {
+    const span: LeaveSpan = { startDate: "2025-05-05", endDate: "2025-05-09", startDayPart: "FIRST_HALF" };
+    const { days, totalDays } = computeLeaveDays(span, cal);
+    expect(days[0]).toEqual({ date: "2025-05-05", dayPart: "FIRST_HALF" });
+    expect(days.at(-1)).toEqual({ date: "2025-05-09", dayPart: "FULL" });
+    expect(totalDays).toBe(4.5);
+  });
+
+  it("applies a half-day end only across a week", () => {
+    const span: LeaveSpan = { startDate: "2025-05-05", endDate: "2025-05-09", endDayPart: "SECOND_HALF" };
+    const { days, totalDays } = computeLeaveDays(span, cal);
+    expect(days[0]).toEqual({ date: "2025-05-05", dayPart: "FULL" });
+    expect(days.at(-1)).toEqual({ date: "2025-05-09", dayPart: "SECOND_HALF" });
+    expect(totalDays).toBe(4.5);
+  });
+
+  it("combines half-day boundaries with holidays inside the span", () => {
+    const span: LeaveSpan = { startDate: "2025-05-01", endDate: "2025-05-06", startDayPart: "FIRST_HALF", endDayPart: "SECOND_HALF" };
+    const { days, totalDays } = computeLeaveDays(span, cal);
+    expect(days.map((d) => d.date)).toEqual(["2025-05-02", "2025-05-05", "2025-05-06"]);
+    expect(days[0]).toEqual({ date: "2025-05-02", dayPart: "FIRST_HALF" });
+    expect(days[1]).toEqual({ date: "2025-05-05", dayPart: "FULL" });
+    expect(days[2]).toEqual({ date: "2025-05-06", dayPart: "SECOND_HALF" });
+    expect(totalDays).toBe(2);
   });
 
   it("rejects a span with no working days", () => {
@@ -233,6 +305,93 @@ describe("leave-days", () => {
   });
 });
 
+describe("holiday-counting setting (countHolidaysAsVacationDays)", () => {
+  it("TEST 1: OFF — 13→16 May with 14 May a holiday deducts 3 days", () => {
+    const span: LeaveSpan = { startDate: "2025-05-13", endDate: "2025-05-16" };
+    const { days, totalDays } = computeLeaveDays(span, { holidays: mayHoliday });
+    expect(days.map((d) => d.date)).toEqual(["2025-05-13", "2025-05-15", "2025-05-16"]);
+    expect(totalDays).toBe(3);
+  });
+
+  it("TEST 2: ON — the same dates deduct 4 days (the holiday counts)", () => {
+    const span: LeaveSpan = { startDate: "2025-05-13", endDate: "2025-05-16" };
+    const { days, totalDays } = computeLeaveDays(span, {
+      holidays: mayHoliday,
+      countHolidaysAsVacationDays: true,
+    });
+    expect(days.map((d) => d.date)).toEqual(["2025-05-13", "2025-05-14", "2025-05-15", "2025-05-16"]);
+    expect(totalDays).toBe(4);
+  });
+
+  it("TEST 3: no holiday in the period — existing calculation unchanged for both settings", () => {
+    const span: LeaveSpan = { startDate: "2025-05-13", endDate: "2025-05-16" };
+    expect(computeLeaveDays(span, {}).totalDays).toBe(4);
+    expect(computeLeaveDays(span, { countHolidaysAsVacationDays: true }).totalDays).toBe(4);
+  });
+
+  it("TEST 4: multiple holidays — OFF deducts only working days, ON counts both", () => {
+    const span: LeaveSpan = { startDate: "2025-05-13", endDate: "2025-05-17" };
+    const off = computeLeaveDays(span, { holidays: mayHolidays });
+    expect(off.days.map((d) => d.date)).toEqual(["2025-05-13", "2025-05-15"]);
+    expect(off.totalDays).toBe(2);
+    const on = computeLeaveDays(span, { holidays: mayHolidays, countHolidaysAsVacationDays: true });
+    expect(on.days.map((d) => d.date)).toEqual(["2025-05-13", "2025-05-14", "2025-05-15", "2025-05-16"]);
+    expect(on.totalDays).toBe(4); // the 17th is a weekend and stays excluded
+  });
+
+  it("TEST 5: a holiday on a weekend follows the weekend rule, never the holiday rule", () => {
+    const span: LeaveSpan = { startDate: "2025-05-13", endDate: "2025-05-18" };
+    // Holiday counting ON but the holiday (Sat 17) is still a weekend → free.
+    expect(
+      computeLeaveDays(span, { holidays: weekendHoliday, countHolidaysAsVacationDays: true }).totalDays,
+    ).toBe(4);
+    // Holiday counting OFF but weekends count → Sat 17 is still deducted as a weekend.
+    const weekends = computeLeaveDays(span, { holidays: weekendHoliday, countWeekendsWithinSpan: true });
+    expect(weekends.days.some((d) => d.date === "2025-05-17")).toBe(true);
+    expect(weekends.totalDays).toBe(6);
+  });
+
+  it("TEST 6: holiday as the start date with a half-day start", () => {
+    const span: LeaveSpan = { startDate: "2025-05-14", endDate: "2025-05-15", startDayPart: "FIRST_HALF" };
+    // OFF: the holiday is skipped, the half day lands on the next working day.
+    const off = computeLeaveDays(span, { holidays: mayHoliday });
+    expect(off.days).toEqual([{ date: "2025-05-15", dayPart: "FIRST_HALF" }]);
+    expect(off.totalDays).toBe(0.5);
+    // ON: the half day applies to the holiday itself.
+    const on = computeLeaveDays(span, { holidays: mayHoliday, countHolidaysAsVacationDays: true });
+    expect(on.days).toEqual([
+      { date: "2025-05-14", dayPart: "FIRST_HALF" },
+      { date: "2025-05-15", dayPart: "FULL" },
+    ]);
+    expect(on.totalDays).toBe(1.5);
+  });
+
+  it("TEST 6: holiday as the end date with a half-day end", () => {
+    const span: LeaveSpan = { startDate: "2025-05-13", endDate: "2025-05-14", endDayPart: "SECOND_HALF" };
+    const off = computeLeaveDays(span, { holidays: mayHoliday });
+    expect(off.days).toEqual([{ date: "2025-05-13", dayPart: "SECOND_HALF" }]);
+    expect(off.totalDays).toBe(0.5);
+    const on = computeLeaveDays(span, { holidays: mayHoliday, countHolidaysAsVacationDays: true });
+    expect(on.days).toEqual([
+      { date: "2025-05-13", dayPart: "FULL" },
+      { date: "2025-05-14", dayPart: "SECOND_HALF" },
+    ]);
+    expect(on.totalDays).toBe(1.5);
+  });
+
+  it("TEST 7: toggling OFF → ON changes what new requests deduct", () => {
+    const span: LeaveSpan = { startDate: "2025-05-13", endDate: "2025-05-16" };
+    expect(computeLeaveDays(span, { holidays: mayHoliday }).totalDays).toBe(3);
+    expect(computeLeaveDays(span, { holidays: mayHoliday, countHolidaysAsVacationDays: true }).totalDays).toBe(4);
+  });
+
+  it("a one-day span on a holiday is rejected OFF but valid ON", () => {
+    const span: LeaveSpan = { startDate: "2025-05-14", endDate: "2025-05-14" };
+    expect(() => computeLeaveDays(span, { holidays: mayHoliday })).toThrow(LeaveSpanError);
+    expect(computeLeaveDays(span, { holidays: mayHoliday, countHolidaysAsVacationDays: true }).totalDays).toBe(1);
+  });
+});
+
 describe("overlap", () => {
   it("detects intersecting ranges", () => {
     expect(rangesOverlap("2025-05-05", "2025-05-09", "2025-05-08", "2025-05-12")).toBe(true);
@@ -279,6 +438,15 @@ describe("overlap", () => {
     const weekends = { holidays, countWeekendsWithinSpan: true };
     expect(spansOverlap(a, b, cal).overlappingDays).toBe(0);
     expect(spansOverlap(a, b, weekends).overlappingDays).toBe(1);
+  });
+
+  it("detects holiday conflicts only when holidays count as vacation days", () => {
+    const a = half({ startDate: "2025-05-13", endDate: "2025-05-14" });
+    const b = half({ startDate: "2025-05-14", endDate: "2025-05-15" });
+    expect(spansOverlap(a, b, { holidays: mayHoliday }).overlappingDays).toBe(0); // the holiday is free
+    expect(
+      spansOverlap(a, b, { holidays: mayHoliday, countHolidaysAsVacationDays: true }).overlappingDays,
+    ).toBe(1);
   });
 });
 

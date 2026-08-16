@@ -31,9 +31,15 @@ interface RequestFormProps {
   employmentStartDate: string | null;
   countWeekendsWithinSpan: boolean;
   extendWeekendAfterFriday: boolean;
+  countHolidaysAsVacationDays: boolean;
+  halfDayEnabled: boolean;
+  halfDayStartDay: boolean;
+  halfDayEndDay: boolean;
 }
 
 const DAY_PART_OPTIONS = ["FULL", "FIRST_HALF", "SECOND_HALF"] as const;
+
+type DayPartValue = (typeof DAY_PART_OPTIONS)[number];
 
 export function RequestForm({
   leaveTypes,
@@ -42,6 +48,10 @@ export function RequestForm({
   employmentStartDate,
   countWeekendsWithinSpan,
   extendWeekendAfterFriday,
+  countHolidaysAsVacationDays,
+  halfDayEnabled,
+  halfDayStartDay,
+  halfDayEndDay,
 }: RequestFormProps) {
   const router = useRouter();
   const t = useTranslations("requestForm");
@@ -61,6 +71,14 @@ export function RequestForm({
 
   const minDate = employmentStartDate ?? todayISO();
 
+  // Half-day selectors only apply where the company policy allows them. When a
+  // boundary isn't allowed, the request is submitted as a full day regardless
+  // of any stale selector state.
+  const startHalfAllowed = halfDayEnabled && halfDayStartDay;
+  const endHalfAllowed = halfDayEnabled && halfDayEndDay;
+  const effectiveStartPart: DayPartValue = startHalfAllowed ? (startDayPart as DayPartValue) : "FULL";
+  const effectiveEndPart: DayPartValue = endHalfAllowed ? (endDayPart as DayPartValue) : "FULL";
+
   const preview = React.useMemo(() => {
     if (!range.from || !range.to) return null;
     try {
@@ -68,15 +86,19 @@ export function RequestForm({
         {
           startDate: range.from,
           endDate: range.to,
-          startDayPart: startDayPart as "FULL" | "FIRST_HALF" | "SECOND_HALF",
-          endDayPart: endDayPart as "FULL" | "FIRST_HALF" | "SECOND_HALF",
+          startDayPart: effectiveStartPart,
+          endDayPart: effectiveEndPart,
         },
-        { holidays: holidayDates, countWeekendsWithinSpan, extendWeekendAfterFriday },
+        { holidays: holidayDates, countWeekendsWithinSpan, extendWeekendAfterFriday, countHolidaysAsVacationDays },
       );
     } catch {
       return null;
     }
-  }, [range, startDayPart, endDayPart, holidayDates, countWeekendsWithinSpan, extendWeekendAfterFriday]);
+  }, [range, effectiveStartPart, effectiveEndPart, holidayDates, countWeekendsWithinSpan, extendWeekendAfterFriday, countHolidaysAsVacationDays]);
+
+  // A single working day can't start in the afternoon and end in the morning.
+  const sameDay = Boolean(range.from && range.to && range.from === range.to);
+  const invalidSameDayParts = sameDay && effectiveStartPart === "SECOND_HALF" && effectiveEndPart === "FIRST_HALF";
 
   // Toggle-2 clarity: when the Friday-extension applied, totalDays exceeds the
   // actually-selected day count, so both numbers must be shown.
@@ -142,36 +164,42 @@ export function RequestForm({
             />
           </Field>
 
-          <div className="grid gap-5 sm:grid-cols-2">
-            <Field label={t("startDay")} required id="startDayPart">
-              <Select value={startDayPart} onValueChange={setStartDayPart}>
-                <SelectTrigger id="startDayPart">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {DAY_PART_OPTIONS.map((value: (typeof DAY_PART_OPTIONS)[number]) => (
-                    <SelectItem key={value} value={value}>
-                      {tDayPart(value)}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </Field>
-            <Field label={t("endDay")} required id="endDayPart">
-              <Select value={endDayPart} onValueChange={setEndDayPart}>
-                <SelectTrigger id="endDayPart">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {DAY_PART_OPTIONS.map((value: (typeof DAY_PART_OPTIONS)[number]) => (
-                    <SelectItem key={value} value={value}>
-                      {tDayPart(value)}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </Field>
-          </div>
+          {startHalfAllowed || endHalfAllowed ? (
+            <div className="grid gap-5 sm:grid-cols-2">
+              {startHalfAllowed ? (
+                <Field label={t("startDay")} required id="startDayPart">
+                  <Select value={startDayPart} onValueChange={setStartDayPart}>
+                    <SelectTrigger id="startDayPart">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {DAY_PART_OPTIONS.map((value: (typeof DAY_PART_OPTIONS)[number]) => (
+                        <SelectItem key={value} value={value}>
+                          {tDayPart(value)}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </Field>
+              ) : null}
+              {endHalfAllowed ? (
+                <Field label={t("endDay")} required id="endDayPart">
+                  <Select value={endDayPart} onValueChange={setEndDayPart}>
+                    <SelectTrigger id="endDayPart">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {DAY_PART_OPTIONS.map((value: (typeof DAY_PART_OPTIONS)[number]) => (
+                        <SelectItem key={value} value={value}>
+                          {tDayPart(value)}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </Field>
+              ) : null}
+            </div>
+          ) : null}
 
           <Field label={t("reason")} id="reason" hint={t("reasonHint")}>
             <Textarea
@@ -203,8 +231,8 @@ export function RequestForm({
           <input type="hidden" name="leaveTypeId" value={leaveTypeId} />
           <input type="hidden" name="startDate" value={range.from ?? ""} />
           <input type="hidden" name="endDate" value={range.to ?? ""} />
-          <input type="hidden" name="startDayPart" value={startDayPart} />
-          <input type="hidden" name="endDayPart" value={endDayPart} />
+          <input type="hidden" name="startDayPart" value={effectiveStartPart} />
+          <input type="hidden" name="endDayPart" value={effectiveEndPart} />
           <input type="hidden" name="attachmentId" value={attachmentId ?? ""} />
 
           <div className="flex items-center justify-between gap-4 border-t border-border pt-4">
@@ -239,10 +267,21 @@ export function RequestForm({
                   {translateError(state)}
                 </p>
               ) : null}
+              {invalidSameDayParts ? (
+                <p role="alert" className="text-xs font-medium text-destructive">
+                  {t("dayPartOrderError")}
+                </p>
+              ) : null}
             </div>
             <Button
               type="submit"
-              disabled={pending || !range.from || !range.to || (selectedRequiresAttachment && !attachmentId)}
+              disabled={
+                pending ||
+                invalidSameDayParts ||
+                !range.from ||
+                !range.to ||
+                (selectedRequiresAttachment && !attachmentId)
+              }
             >
               {pending ? t("submitting") : t("submitRequest")}
             </Button>

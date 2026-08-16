@@ -80,8 +80,30 @@ const STATIC_MESSAGES: Record<string, string> = {
   "Failed to read calendar feed.": "failedReadFeed",
   "Failed to rotate calendar feed.": "failedRotateFeed",
   "A single working day cannot be split into two half days": "cannotSplitHalfDay",
+  "The end day part cannot be earlier than the start day part.": "endBeforeStart",
+  "Half-day leave is not enabled for your company.": "halfDayDisabled",
+  "Half-day starts are not allowed by company policy.": "halfDayStartDisabled",
+  "Half-day ends are not allowed by company policy.": "halfDayEndDisabled",
+  "Passwords do not match.": "passwordMismatch",
+  "Only a SUPER_ADMIN can reset privileged users' passwords.": "onlySuperAdminResetPrivileged",
   "No file provided (multipart field `file`).": "noFileProvided",
   "File storage is unavailable right now.": "storageUnavailable",
+  "Authorisations are not enabled for your company.": "authorisationsDisabled",
+  "Pick a valid date.": "authorisationInvalidDate",
+  "Authorisations can only be requested for the current monthly period.": "authorisationCurrentMonthOnly",
+  "Hours must be a positive number.": "authorisationHoursNotPositive",
+  "No authorisation balance is available yet.": "authorisationNoBalance",
+  "No authorisation balance row found for this user and period.": "authorisationNoBalance",
+  "Monthly allowance must be a positive number.": "authorisationPolicyAllowance",
+  "Minimum request must be a positive number.": "authorisationPolicyMinHours",
+  "Maximum request cannot be below the minimum.": "authorisationPolicyMaxHours",
+  "Request increment must be a positive number.": "authorisationPolicyIncrement",
+  "Max carry-over cannot be negative.": "authorisationPolicyCarryOver",
+  "Holiday name is required.": "holidayNameRequired",
+  "Invalid holiday date.": "holidayInvalidDate",
+  "A holiday already exists on this date.": "holidayDateExists",
+  "Holiday not found.": "holidayNotFound",
+  "Select at least one holiday to import.": "nagerNoSelection",
 };
 
 /** Regex table for domain span errors (messages built in @timeoff/domain). */
@@ -95,6 +117,11 @@ const PATTERN_MESSAGES: Array<{ re: RegExp; code: string; values: string[] }> = 
   { re: /^Carried-over days must be used by (.+) — end the request on or before that date\.$/, code: "carriedOverExpiry", values: ["expiry"] },
   { re: /^Paid leave starts before your probation ends on (.+)\.$/, code: "probation", values: ["date"] },
   { re: /^Adjustment would take the balance below zero \(currently ([\d.]+) day[s]?\)\.$/, code: "adjustmentBelowZero", values: ["available"] },
+  { re: /^The minimum request is ([\d.]+) hours\.$/, code: "authorisationBelowMinimum", values: ["min"] },
+  { re: /^The maximum request is ([\d.]+) hours\.$/, code: "authorisationAboveMaximum", values: ["max"] },
+  { re: /^Requests must be a multiple of ([\d.]+) hours\.$/, code: "authorisationNotIncrement", values: ["increment"] },
+  { re: /^Insufficient hours: ([\d.]+) available, ([\d.]+) requested\.$/, code: "authorisationInsufficientBalance", values: ["available", "requested"] },
+  { re: /^Adjustment would take the balance below zero \(currently ([\d.]+) h\)\.$/, code: "authorisationAdjustmentBelowZero", values: ["available"] },
 ];
 
 /** Resolves the error key (+ values) for a raw English message, if known. */

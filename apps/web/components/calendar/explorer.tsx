@@ -6,6 +6,7 @@ import { ChevronLeft, ChevronRight, RefreshCw, Search, X } from "lucide-react";
 import { Button, DateRangePicker, toISODate, fromISODate, cn } from "@timeoff/ui";
 import { addDaysISO, diffInDays, todayISO } from "@timeoff/domain";
 import type {
+  CalendarAuthorisation,
   CalendarLeave,
   CalendarRosterMember,
   RequestStatus,
@@ -23,12 +24,15 @@ interface CalendarExplorerProps {
   showDepartmentFilter: boolean;
   departments: { id: string; name: string }[];
   leaveTypes: { id: string; name: string; color: string }[];
+  /** Company has the authorisations module enabled (hides the layer toggle). */
+  authorisationsEnabled: boolean;
 }
 
 interface CalendarData {
   requests: CalendarLeave[];
   roster: CalendarRosterMember[];
   holidays: string[];
+  authorisations: CalendarAuthorisation[];
 }
 
 function pad(n: number): string {
@@ -105,6 +109,7 @@ export function CalendarExplorer({
   showDepartmentFilter,
   departments,
   leaveTypes,
+  authorisationsEnabled,
 }: CalendarExplorerProps) {
   const locale = useLocale();
   const t = useTranslations("calendar");
@@ -116,6 +121,7 @@ export function CalendarExplorer({
   const [search, setSearch] = React.useState("");
   const [leaveTypeId, setLeaveTypeId] = React.useState("");
   const [departmentId, setDepartmentId] = React.useState("");
+  const [showAuthorisations, setShowAuthorisations] = React.useState(false);
   const [data, setData] = React.useState<CalendarData | null>(null);
   const [loading, setLoading] = React.useState(true);
   const [error, setError] = React.useState<string | null>(null);
@@ -140,6 +146,7 @@ export function CalendarExplorer({
     if (leaveTypeId) params.set("leaveType", leaveTypeId);
     if (departmentId) params.set("department", departmentId);
     if (view === "team") params.set("roster", "1");
+    if (showAuthorisations) params.set("authorisations", "1");
     fetch(`/api/calendar?${params.toString()}`)
       .then((res) =>
         res.ok
@@ -163,7 +170,7 @@ export function CalendarExplorer({
     return () => {
       cancelled = true;
     };
-  }, [from, to, statusKey, leaveTypeId, departmentId, view, reloadTick]);
+  }, [from, to, statusKey, leaveTypeId, departmentId, view, reloadTick, showAuthorisations]);
 
   const today = todayISO();
   const isCurrentMonth = isFullMonth(range) && range.from === monthRangeOf(today).from;
@@ -194,6 +201,7 @@ export function CalendarExplorer({
   const allRequests = data?.requests ?? [];
   const allRoster = data?.roster ?? [];
   const holidays = data?.holidays ?? [];
+  const allAuthorisations = data?.authorisations ?? [];
 
   const query = search.trim().toLocaleLowerCase();
   const requests = query
@@ -202,6 +210,9 @@ export function CalendarExplorer({
   const roster = query
     ? allRoster.filter((m: CalendarRosterMember) => m.name.toLocaleLowerCase().includes(query))
     : allRoster;
+  const authorisations = query
+    ? allAuthorisations.filter((a: CalendarAuthorisation) => a.userName.toLocaleLowerCase().includes(query))
+    : allAuthorisations;
 
   return (
     <div className="space-y-3">
@@ -369,6 +380,20 @@ export function CalendarExplorer({
           <option value="approved">{t("statusApproved")}</option>
           <option value="pending">{t("statusPending")}</option>
         </select>
+        {authorisationsEnabled ? (
+          <label
+            className="flex h-9 cursor-pointer select-none items-center gap-2 rounded-md border border-input bg-card px-3 text-sm shadow-sm"
+          >
+            <input
+              type="checkbox"
+              checked={showAuthorisations}
+              onChange={(e) => setShowAuthorisations(e.target.checked)}
+              className="size-4 accent-[var(--color-primary)]"
+              aria-label={t("showAuthorisations")}
+            />
+            <span className="text-muted-foreground">{t("showAuthorisations")}</span>
+          </label>
+        ) : null}
         <div className="relative">
           <Search className="pointer-events-none absolute left-2.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
           <input
@@ -411,16 +436,18 @@ export function CalendarExplorer({
             <MonthView
               requests={requests}
               holidays={holidays}
+              authorisations={authorisations}
               year={fromISODate(from).getFullYear()}
               month={fromISODate(from).getMonth() + 1}
             />
           ) : view === "list" ? (
-            <ListView requests={requests} holidays={holidays} from={from} to={to} />
+            <ListView requests={requests} holidays={holidays} authorisations={authorisations} from={from} to={to} />
           ) : (
             <TeamView
               requests={requests}
               roster={roster}
               holidays={holidays}
+              authorisations={authorisations}
               from={from}
               to={to}
             />

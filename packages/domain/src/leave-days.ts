@@ -1,7 +1,12 @@
 /**
  * Leave span computation. A leave request spans a date range and consumes a
- * number of *working* days (weekends and holidays are free). The start and end
- * of the span may be half days, which halves the day's cost.
+ * number of *working* days (weekends and holidays are free by default). The
+ * start and end of the span may be half days, which halves the day's cost.
+ *
+ * `countHolidaysAsVacationDays` opts holidays into the working-day set (they
+ * then count against the vacation balance); `countWeekendsWithinSpan` does the
+ * same for weekends. A holiday that falls on a weekend always follows the
+ * weekend rule, never the holiday rule.
  */
 import { assertValidRange, eachDay, isValidISODate } from "./dates";
 import { countBusinessDays, isFridayISO, isWorkingDay, type CalendarOptions } from "./business-days";
@@ -78,6 +83,9 @@ export function computeLeaveDays(span: LeaveSpan, options: CalendarOptions = {})
   let days: ComputedLeaveDay[];
   if (working.length === 1) {
     if (startIsHalf && endIsHalf && startPart !== endPart) {
+      if (startPart === "SECOND_HALF" && endPart === "FIRST_HALF") {
+        throw new LeaveSpanError("The end day part cannot be earlier than the start day part.");
+      }
       throw new LeaveSpanError("A single working day cannot be split into two half days");
     }
     const singlePart: DayPart = startIsHalf ? startPart : endPart;

@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "@timeoff/db";
 import { isValidISODate } from "@timeoff/domain";
 import { getCurrentUser } from "@/lib/session";
-import { listCalendarRequests, listCalendarRoster } from "@/lib/services/calendar";
+import { listCalendarAuthorisations, listCalendarRequests, listCalendarRoster } from "@/lib/services/calendar";
 import { companyHolidays } from "@/lib/services/leave";
 import type { RequestStatus } from "@/lib/calendar-shared";
 
@@ -27,8 +27,10 @@ export async function GET(request: Request) {
   const departmentId = url.searchParams.get("department") ?? undefined;
   const leaveTypeId = url.searchParams.get("leaveType") ?? undefined;
   const roster = url.searchParams.get("roster") === "1";
+  // Optional authorisations layer: only queried when the explorer asks for it.
+  const includeAuthorisations = url.searchParams.get("authorisations") === "1";
 
-  const [requests, rosterData, holidays] = await Promise.all([
+  const [requests, rosterData, holidays, authorisations] = await Promise.all([
     listCalendarRequests(user, {
       from,
       to,
@@ -38,11 +40,13 @@ export async function GET(request: Request) {
     }),
     roster ? listCalendarRoster(user) : Promise.resolve([]),
     companyHolidays(prisma, user.companyId!, from, to),
+    includeAuthorisations ? listCalendarAuthorisations(user, from, to) : Promise.resolve([]),
   ]);
 
   return NextResponse.json({
     requests,
     roster: rosterData,
     holidays: [...holidays],
+    authorisations,
   });
 }

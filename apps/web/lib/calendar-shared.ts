@@ -32,6 +32,23 @@ export interface CalendarRosterMember {
   departmentName: string;
 }
 
+/**
+ * A single-day authorisation (time-range absence) rendered as a distinct,
+ * hour-based layer over the day-based leave calendar. Pending/approved only.
+ */
+export interface CalendarAuthorisation {
+  id: string;
+  userId: string;
+  userName: string;
+  departmentId: string;
+  departmentName: string;
+  date: string;
+  startTime: string | null;
+  endTime: string | null;
+  hours: number;
+  status: RequestStatus;
+}
+
 export interface CalendarApiParams {
   from: string;
   to: string;

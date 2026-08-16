@@ -8,6 +8,7 @@ import { Field, Input } from "@timeoff/ui";
 interface WeekendCalculatorProps {
   countWeekendsWithinSpan: boolean;
   extendWeekendAfterFriday: boolean;
+  countHolidaysAsVacationDays: boolean;
   holidayDates: string[];
 }
 
@@ -20,6 +21,7 @@ interface WeekendCalculatorProps {
 export function WeekendCalculator({
   countWeekendsWithinSpan,
   extendWeekendAfterFriday,
+  countHolidaysAsVacationDays,
   holidayDates,
 }: WeekendCalculatorProps) {
   const t = useTranslations("adminSettings");
@@ -33,12 +35,12 @@ export function WeekendCalculator({
     try {
       return computeLeaveDays(
         { startDate: start, endDate: end },
-        { holidays, countWeekendsWithinSpan, extendWeekendAfterFriday },
+        { holidays, countWeekendsWithinSpan, extendWeekendAfterFriday, countHolidaysAsVacationDays },
       );
     } catch {
       return null;
     }
-  }, [start, end, holidays, countWeekendsWithinSpan, extendWeekendAfterFriday]);
+  }, [start, end, holidays, countWeekendsWithinSpan, extendWeekendAfterFriday, countHolidaysAsVacationDays]);
 
   const selectedDays = preview
     ? preview.days.reduce((sum, day) => sum + (day.dayPart === "FULL" ? 1 : 0.5), 0)

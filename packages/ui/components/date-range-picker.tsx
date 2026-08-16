@@ -63,10 +63,8 @@ export function DateRangePicker({
       return;
     }
     const current = value ?? { from: null, to: null };
-    // If we have a completed range, or a start newer than the picked date,
-    // restart selection from this date.
-    if (!current.from || (current.from && current.to)) {
-      onChange?.({ from: iso, to: null });
+    if (!current.from || (current.to && current.to !== current.from)) {
+      onChange?.({ from: iso, to: iso });
     } else if (iso < current.from) {
       onChange?.({ from: iso, to: current.from });
     } else {
@@ -79,7 +77,12 @@ export function DateRangePicker({
     setView({ year: d.getFullYear(), month: d.getMonth() + 1 });
   };
 
-  const effectiveEnd = value?.to ?? hover;
+  const isSingleDaySelection = Boolean(
+    value?.from && value?.to && value.from === value.to
+  );
+  const effectiveEnd = isSingleDaySelection
+    ? (hover ?? value?.to)
+    : (value?.to ?? hover);
   const rangeStart = value?.from ?? null;
   const showTwo = mode === "range";
 
@@ -172,7 +175,10 @@ export function DateRangePicker({
                 rangeEnd={effectiveEnd}
                 disabledDates={disabledDates}
                 onHoverDate={(iso) =>
-                  mode === "range" && value?.from && !value.to && setHover(iso)
+                  mode === "range" &&
+                  value?.from &&
+                  (!value.to || value.from === value.to) &&
+                  setHover(iso)
                 }
               />
               {showTwo ? (
@@ -192,7 +198,10 @@ export function DateRangePicker({
                   rangeEnd={effectiveEnd}
                   disabledDates={disabledDates}
                   onHoverDate={(iso) =>
-                    mode === "range" && value?.from && !value.to && setHover(iso)
+                    mode === "range" &&
+                    value?.from &&
+                    (!value.to || value.from === value.to) &&
+                    setHover(iso)
                   }
                 />
               ) : null}
@@ -203,7 +212,7 @@ export function DateRangePicker({
                   {rangeStart
                     ? `From ${rangeStart}`
                     : "Pick a start date"}
-                  {value?.to ? ` · to ${value.to}` : ""}
+                  {effectiveEnd ? ` · to ${effectiveEnd}` : ""}
                 </span>
                 {rangeStart && !value?.to ? (
                   <button

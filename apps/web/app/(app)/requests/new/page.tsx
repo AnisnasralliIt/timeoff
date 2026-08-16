@@ -52,6 +52,14 @@ export default async function NewRequestPage() {
   );
 
   const weekendRules = company.countWeekendsWithinSpan || company.extendWeekendAfterFriday;
+  const halfDays = company.halfDayEnabled;
+  const subtitleKey = weekendRules
+    ? halfDays
+      ? "subtitleWeekends"
+      : "subtitleWeekendsNoHalfDays"
+    : halfDays
+      ? "subtitle"
+      : "subtitleNoHalfDays";
 
   return (
     <div className="mx-auto max-w-2xl space-y-6">
@@ -60,7 +68,7 @@ export default async function NewRequestPage() {
           {t("title")}
         </h1>
         <p className="mt-1 text-sm text-muted-foreground">
-          {t(weekendRules ? "subtitleWeekends" : "subtitle")}
+          {t(subtitleKey)}
         </p>
       </div>
 
@@ -77,6 +85,10 @@ export default async function NewRequestPage() {
         employmentStartDate={dbUser?.employmentStartDate ?? null}
         countWeekendsWithinSpan={company.countWeekendsWithinSpan}
         extendWeekendAfterFriday={company.extendWeekendAfterFriday}
+        countHolidaysAsVacationDays={company.countHolidaysAsVacationDays}
+        halfDayEnabled={company.halfDayEnabled}
+        halfDayStartDay={company.halfDayStartDay}
+        halfDayEndDay={company.halfDayEndDay}
       />
     </div>
   );

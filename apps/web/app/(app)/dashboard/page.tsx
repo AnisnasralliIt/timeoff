@@ -6,6 +6,7 @@ import { prisma } from "@timeoff/db";
 import { availableBalance, todayISO } from "@timeoff/domain";
 import { requireAuth } from "@/lib/session";
 import { balanceHistoryFor, listPendingForApproval, syncCurrentAccruals } from "@/lib/services/leave";
+import { authorisationOverviewFor } from "@/lib/services/authorisations";
 import { Badge, BalanceRing, Button, Card, CardContent, CardDescription, CardHeader, CardTitle, statusVariant, type BadgeProps } from "@timeoff/ui";
 import { BalanceHistory } from "@/components/balance-history";
 
@@ -31,6 +32,7 @@ export default async function DashboardPage() {
   const user = await requireAuth();
   const today = todayISO();
   const t = await getTranslations("dashboard");
+  const tAuth = await getTranslations("authorisations");
   const tHistory = await getTranslations("balanceHistory");
   const tStatus = await getTranslations("status");
   const tCommon = await getTranslations("common");
@@ -75,6 +77,7 @@ export default async function DashboardPage() {
 
   const showApprovals = user.role !== "EMPLOYEE";
   const pendingForApproval = showApprovals ? (await listPendingForApproval(user)).slice(0, 5) : [];
+  const authorisations = await authorisationOverviewFor(user);
 
   const vacation = balances.find((b: (typeof balances)[number]) => b.leaveType.unit === "DAYS");
   const firstName = user.name.split(" ")[0] ?? user.name;
@@ -238,6 +241,46 @@ export default async function DashboardPage() {
           </CardContent>
         </Card>
       </div>
+
+      {authorisations ? (
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <CalendarClock className="size-4 text-muted-foreground" />
+              {t("authorisationsBalance")}
+            </CardTitle>
+            <CardDescription>{t("authorisationsPeriod", { period: authorisations.period })}</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="grid gap-4 sm:grid-cols-4">
+              <div className="rounded-md border border-border p-4">
+                <p className="text-xs text-muted-foreground">{tAuth("available")}</p>
+                <p className="mt-1 font-display text-2xl font-semibold">
+                  {tAuth("hours", { count: authorisations.available })}
+                </p>
+              </div>
+              <div className="rounded-md border border-border p-4">
+                <p className="text-xs text-muted-foreground">{tAuth("used")}</p>
+                <p className="mt-1 font-display text-2xl font-semibold">
+                  {tAuth("hours", { count: authorisations.used })}
+                </p>
+              </div>
+              <div className="rounded-md border border-border p-4">
+                <p className="text-xs text-muted-foreground">{tAuth("pending")}</p>
+                <p className="mt-1 font-display text-2xl font-semibold">
+                  {tAuth("hours", { count: authorisations.pending })}
+                </p>
+              </div>
+              <div className="rounded-md border border-border p-4">
+                <p className="text-xs text-muted-foreground">{tAuth("upcomingTitle")}</p>
+                <p className="mt-1 font-display text-2xl font-semibold">
+                  {tAuth("items", { count: authorisations.upcoming.length })}
+                </p>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      ) : null}
 
       <Card>
         <CardHeader>

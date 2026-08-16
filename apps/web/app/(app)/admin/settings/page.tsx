@@ -2,9 +2,11 @@ import type { Metadata } from "next";
 import { getTranslations } from "next-intl/server";
 import { requireRole } from "@/lib/session";
 import { prisma } from "@timeoff/db";
+import { getAuthorisationPolicy } from "@/lib/services/authorisations";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@timeoff/ui";
 import { CompanySettingsForm } from "@/components/admin/company-settings-form";
 import { WeekendCalculator } from "@/components/admin/weekend-calculator";
+import { AuthorisationPolicyForm } from "@/components/admin/authorisation-policy-form";
 
 export async function generateMetadata(): Promise<Metadata> {
   const t = await getTranslations("metadata");
@@ -14,7 +16,9 @@ export async function generateMetadata(): Promise<Metadata> {
 export default async function AdminSettingsPage() {
   const user = await requireRole(["HR", "ADMIN"]);
   const t = await getTranslations("adminSettings");
+  const tPolicy = await getTranslations("authorisationsPolicy");
   const company = await prisma.company.findUniqueOrThrow({ where: { id: user.companyId! } });
+  const policy = await getAuthorisationPolicy(prisma, user.companyId!);
 
   const now = new Date();
   const thisYear = now.getFullYear();
@@ -46,6 +50,10 @@ export default async function AdminSettingsPage() {
           <CompanySettingsForm
             countWeekendsWithinSpan={company.countWeekendsWithinSpan}
             extendWeekendAfterFriday={company.extendWeekendAfterFriday}
+            countHolidaysAsVacationDays={company.countHolidaysAsVacationDays}
+            halfDayEnabled={company.halfDayEnabled}
+            halfDayStartDay={company.halfDayStartDay}
+            halfDayEndDay={company.halfDayEndDay}
           />
         </CardContent>
       </Card>
@@ -58,7 +66,27 @@ export default async function AdminSettingsPage() {
           <WeekendCalculator
             countWeekendsWithinSpan={company.countWeekendsWithinSpan}
             extendWeekendAfterFriday={company.extendWeekendAfterFriday}
+            countHolidaysAsVacationDays={company.countHolidaysAsVacationDays}
             holidayDates={[...holidayDates]}
+          />
+        </CardContent>
+      </Card>
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base">{tPolicy("title")}</CardTitle>
+          <CardDescription>{tPolicy("description")}</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <AuthorisationPolicyForm
+            enabled={policy?.enabled ?? false}
+            monthlyAllowance={policy?.monthlyAllowance ?? 4}
+            minRequestHours={policy?.minRequestHours ?? 2}
+            maxRequestHours={policy?.maxRequestHours ?? 4}
+            requestIncrementHours={policy?.requestIncrementHours ?? 2}
+            carryOverEnabled={policy?.carryOverEnabled ?? false}
+            maxCarryOverHours={policy?.maxCarryOverHours ?? 4}
+            prorateFirstMonth={policy?.prorateFirstMonth ?? false}
+            requiresApproval={policy?.requiresApproval ?? true}
           />
         </CardContent>
       </Card>

@@ -7,14 +7,17 @@ import { todayISO } from "@timeoff/domain";
 import {
   clipLeaveToDays,
   leaveSegments,
+  type CalendarAuthorisation,
   type CalendarLeave,
 } from "@/lib/calendar-shared";
 import { LeaveBar } from "@/components/calendar/leave-bar";
+import { AuthorisationChip } from "@/components/calendar/authorisation-chip";
 import { CalendarLegend } from "@/components/calendar/calendar-legend";
 
 interface MonthViewProps {
   requests: CalendarLeave[];
   holidays: string[];
+  authorisations: CalendarAuthorisation[];
   year: number;
   month: number;
 }
@@ -64,7 +67,7 @@ function layoutWeek(weekDays: string[], requests: CalendarLeave[]): PlacedBar[] 
   return placed;
 }
 
-export function MonthView({ requests, holidays, year, month }: MonthViewProps) {
+export function MonthView({ requests, holidays, authorisations, year, month }: MonthViewProps) {
   const locale = useLocale();
   const t = useTranslations("calendar");
   const cells = monthGrid(year, month).cells;
@@ -75,6 +78,14 @@ export function MonthView({ requests, holidays, year, month }: MonthViewProps) {
   const monthEnd = `${year}-${String(month).padStart(2, "0")}-${String(new Date(year, month, 0).getDate()).padStart(2, "0")}`;
   const today = todayISO();
   const hasLeaveInMonth = requests.some((r: CalendarLeave) => r.startDate <= monthEnd && r.endDate >= monthStart);
+
+  const authorisationsByDay = new Map<string, CalendarAuthorisation[]>();
+  for (const a of authorisations) {
+    const list = authorisationsByDay.get(a.date) ?? [];
+    list.push(a);
+    authorisationsByDay.set(a.date, list);
+  }
+  const hasAuthorisationsInMonth = authorisations.length > 0;
 
   return (
     <div className="select-none rounded-lg border border-border bg-card p-3 shadow-sm">
@@ -136,6 +147,13 @@ export function MonthView({ requests, holidays, year, month }: MonthViewProps) {
                       {Number(day.slice(-2))}
                     </span>
                   ) : null}
+                  {day && authorisationsByDay.has(day) ? (
+                    <div className="absolute inset-x-1 bottom-1 flex max-h-16 flex-col flex-wrap items-start gap-0.5 overflow-hidden">
+                      {authorisationsByDay.get(day)!.map((a: CalendarAuthorisation) => (
+                        <AuthorisationChip key={a.id} authorisation={a} compact />
+                      ))}
+                    </div>
+                  ) : null}
                 </div>
               );
             })}
@@ -153,11 +171,11 @@ export function MonthView({ requests, holidays, year, month }: MonthViewProps) {
           </div>
         );
       })}
-      {!hasLeaveInMonth ? (
+      {!hasLeaveInMonth && !hasAuthorisationsInMonth ? (
         <p className="px-1 pt-3 text-sm text-muted-foreground">{t("quietMonthShort")}</p>
       ) : null}
       <div className="mt-3 flex justify-center border-t border-border pt-3">
-        <CalendarLegend requests={requests} />
+        <CalendarLegend requests={requests} authorisations={authorisations} />
       </div>
     </div>
   );

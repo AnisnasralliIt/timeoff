@@ -8,6 +8,7 @@ import { Badge, Card, CardContent, CardHeader, CardTitle } from "@timeoff/ui";
 import { CreateUserDialog } from "@/components/admin/create-user-form";
 import { EditUserDialog } from "@/components/admin/edit-user-form";
 import { DeleteUserDialog } from "@/components/admin/delete-user-dialog";
+import { ChangePasswordDialog } from "@/components/admin/change-password-dialog";
 import { roleBadgeVariant } from "@/components/admin/user-badges";
 import { SUPERVISOR_ROLES } from "@/lib/permissions";
 
@@ -125,6 +126,7 @@ export default async function AdminUsersPage({
                     canGrantAdmin={canGrantAdmin}
                     defaultOpen={targetUser?.id === u.id}
                   />
+                  <ChangePasswordDialog userId={u.id} name={u.name} />
                   <DeleteUserDialog userId={u.id} name={u.name} isSelf={u.id === user.id} />
                 </div>
               </li>

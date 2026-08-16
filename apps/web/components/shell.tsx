@@ -4,7 +4,7 @@ import * as React from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useTranslations } from "next-intl";
-import { LogOut, Menu, Settings } from "lucide-react";
+import { LogOut, Menu } from "lucide-react";
 import {
   Avatar,
   Button,
@@ -49,10 +49,12 @@ export function Shell({
   user,
   notifications,
   children,
+  authorisationsEnabled = false,
 }: {
   user: ShellUser;
   notifications?: React.ReactNode;
   children: React.ReactNode;
+  authorisationsEnabled?: boolean;
 }) {
   const pathname = usePathname();
   const [mobileOpen, setMobileOpen] = React.useState(false);
@@ -66,7 +68,11 @@ export function Shell({
     .map((section: (typeof navSections)[number]) => ({
       ...section,
       items: section.items.filter(
-        (item: (typeof section.items)[number]) => !item.minRole || roleAllowed(user, item.minRole),
+        (item: (typeof section.items)[number]) =>
+          (!item.minRole || roleAllowed(user, item.minRole)) &&
+          (!item.featureFlag ||
+            item.featureFlag !== "authorisations" ||
+            authorisationsEnabled),
       ),
     }))
     .filter((section: (typeof navSections)[number]) => section.items.length > 0);
@@ -131,10 +137,6 @@ export function Shell({
           <DropdownMenuContent align="end">
             <DropdownMenuLabel>{user.email}</DropdownMenuLabel>
             <DropdownMenuSeparator />
-            <DropdownMenuItem>
-              <Settings className="size-4" />
-              {t("settings")}
-            </DropdownMenuItem>
             <DropdownMenuItem destructive asChild>
               <form action={signOutAction}>
                 <button type="submit" className="flex w-full items-center gap-2">

@@ -412,6 +412,49 @@ export async function updateUserForAdmin(user: SessionUser, userId: string, inpu
   return updated;
 }
 
+export interface ChangePasswordInput {
+  password: string;
+}
+
+/**
+ * Sets a new password for another user. Guarded like a role change: an ADMIN
+ * cannot reset a privileged user's (ADMIN/SUPER_ADMIN) password — only a
+ * SUPER_ADMIN can. The old password is invalidated immediately (the hash is
+ * replaced) and the change is audited without ever storing the password or its
+ * hash. Clears `mustChangePassword` since the admin just handed the user a
+ * known password.
+ */
+export async function changeUserPasswordForAdmin(user: SessionUser, userId: string, input: ChangePasswordInput) {
+  requireHr(user);
+  if (!input.password || input.password.length < 8) {
+    throw new LeaveError("A password of at least 8 characters is required.");
+  }
+  const target = await prisma.user.findFirst({
+    where: { id: userId, companyId: user.companyId },
+  });
+  if (!target) throw new LeaveError("User not found.");
+  if ((target.role === "ADMIN" || target.role === "SUPER_ADMIN") && user.role !== "SUPER_ADMIN") {
+    throw new LeaveError("Only a SUPER_ADMIN can reset privileged users' passwords.");
+  }
+  const passwordHash = await bcrypt.hash(input.password, 10);
+  await prisma.$transaction(async (tx) => {
+    await tx.user.update({
+      where: { id: userId },
+      data: { passwordHash, mustChangePassword: false },
+    });
+    await audit(tx, {
+      companyId: user.companyId!,
+      actorId: user.id,
+      action: "user.password.change",
+      entityType: "User",
+      entityId: userId,
+      entityName: target.name,
+      employeeId: userId,
+    });
+  });
+  return { ok: true as const };
+}
+
 /**
  * True, permanent, cascading hard deletion (irreversible). The user's *own*
  * rows are deleted: leave requests (+ days + approval steps + attachments),
@@ -949,20 +992,37 @@ export async function adjustBalanceForAdmin(
 
 /* ------------------------------- Settings -------------------------------- */
 
-export async function updateCompanySettingsForAdmin(
-  user: SessionUser,
-  input: { countWeekendsWithinSpan: boolean; extendWeekendAfterFriday: boolean },
-) {
+export interface CompanySettingsInput {
+  countWeekendsWithinSpan: boolean;
+  extendWeekendAfterFriday: boolean;
+  countHolidaysAsVacationDays: boolean;
+  halfDayEnabled: boolean;
+  halfDayStartDay: boolean;
+  halfDayEndDay: boolean;
+}
+
+export async function updateCompanySettingsForAdmin(user: SessionUser, input: CompanySettingsInput) {
   requireHr(user);
   const before = await prisma.company.findUniqueOrThrow({
     where: { id: user.companyId! },
-    select: { countWeekendsWithinSpan: true, extendWeekendAfterFriday: true },
+    select: {
+      countWeekendsWithinSpan: true,
+      extendWeekendAfterFriday: true,
+      countHolidaysAsVacationDays: true,
+      halfDayEnabled: true,
+      halfDayStartDay: true,
+      halfDayEndDay: true,
+    },
   });
   const updated = await prisma.company.update({
     where: { id: user.companyId! },
     data: {
       countWeekendsWithinSpan: input.countWeekendsWithinSpan,
       extendWeekendAfterFriday: input.extendWeekendAfterFriday,
+      countHolidaysAsVacationDays: input.countHolidaysAsVacationDays,
+      halfDayEnabled: input.halfDayEnabled,
+      halfDayStartDay: input.halfDayStartDay,
+      halfDayEndDay: input.halfDayEndDay,
     },
   });
   await audit(prisma, {
@@ -975,6 +1035,10 @@ export async function updateCompanySettingsForAdmin(
     after: {
       countWeekendsWithinSpan: updated.countWeekendsWithinSpan,
       extendWeekendAfterFriday: updated.extendWeekendAfterFriday,
+      countHolidaysAsVacationDays: updated.countHolidaysAsVacationDays,
+      halfDayEnabled: updated.halfDayEnabled,
+      halfDayStartDay: updated.halfDayStartDay,
+      halfDayEndDay: updated.halfDayEndDay,
     },
   });
   return updated;

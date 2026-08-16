@@ -58,6 +58,7 @@ export function NotificationBellClient({ unread, items }: { unread: number; item
     }
     setOpen(false);
     if (item.entityType === "LeaveRequest" && item.entityId) router.push(`/requests/${item.entityId}`);
+    else if (item.entityType === "AuthorisationRequest" && item.entityId) router.push("/authorisations");
     else router.push("/notifications");
     router.refresh();
   };

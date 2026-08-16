@@ -36,6 +36,7 @@ function timeAgo(
 
 function hrefFor(item: NotificationRow): string | null {
   if (item.entityType === "LeaveRequest" && item.entityId) return `/requests/${item.entityId}`;
+  if (item.entityType === "AuthorisationRequest" && item.entityId) return `/authorisations`;
   return null;
 }
 

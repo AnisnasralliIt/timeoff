@@ -1,16 +1,17 @@
 "use client";
 
 import { useTranslations } from "next-intl";
-import type { CalendarLeave } from "@/lib/calendar-shared";
+import type { CalendarAuthorisation, CalendarLeave } from "@/lib/calendar-shared";
 
 interface CalendarLegendProps {
   requests: CalendarLeave[];
+  authorisations?: CalendarAuthorisation[];
 }
 
 const PENDING_STRIPES = "repeating-linear-gradient(45deg, transparent 0 4px, rgba(0,0,0,0.25) 4px 8px)";
 
 /** Small legend matching the calendar bars: leave-type colors, status, today. */
-export function CalendarLegend({ requests }: CalendarLegendProps) {
+export function CalendarLegend({ requests, authorisations = [] }: CalendarLegendProps) {
   const t = useTranslations("calendar");
 
   const leaveTypes = [];
@@ -42,6 +43,15 @@ export function CalendarLegend({ requests }: CalendarLegendProps) {
         />
         {t("legendPending")}
       </span>
+      {authorisations.length > 0 ? (
+        <>
+          <span aria-hidden className="size-0.5 rounded-full bg-muted-foreground/50" />
+          <span className="flex items-center gap-1.5">
+            <span className="h-2.5 w-2.5 shrink-0 rounded-sm border border-dashed border-primary/50 bg-primary/5" aria-hidden />
+            {t("legendAuthorisations")}
+          </span>
+        </>
+      ) : null}
       <span className="flex items-center gap-1.5">
         <span className="h-2.5 w-2.5 shrink-0 rounded-sm border border-border bg-muted" aria-hidden />
         {t("legendWeekend")}

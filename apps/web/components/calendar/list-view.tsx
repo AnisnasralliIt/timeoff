@@ -6,11 +6,13 @@ import { useLocale, useTranslations } from "next-intl";
 import { CalendarDays, Users } from "lucide-react";
 import { Badge, EmptyState, statusVariant, cn } from "@timeoff/ui";
 import { eachDay } from "@timeoff/domain";
-import { isHalfDay, type CalendarLeave } from "@/lib/calendar-shared";
+import { isHalfDay, type CalendarAuthorisation, type CalendarLeave } from "@/lib/calendar-shared";
+import { AuthorisationChip } from "@/components/calendar/authorisation-chip";
 
 interface ListViewProps {
   requests: CalendarLeave[];
   holidays: string[];
+  authorisations: CalendarAuthorisation[];
   from: string;
   to: string;
 }
@@ -38,7 +40,7 @@ function HalfNote({ leave }: { leave: CalendarLeave }) {
   return <span className="text-muted-foreground">· {notes.join(" · ")}</span>;
 }
 
-export function ListView({ requests, holidays, from, to }: ListViewProps) {
+export function ListView({ requests, holidays, authorisations, from, to }: ListViewProps) {
   const locale = useLocale();
   const t = useTranslations("calendar");
   const tStatus = useTranslations("status");
@@ -46,7 +48,7 @@ export function ListView({ requests, holidays, from, to }: ListViewProps) {
 
   const rangeLabel = `${shortDate(from, locale)} – ${shortDate(to, locale)}`;
 
-  if (requests.length === 0) {
+  if (requests.length === 0 && authorisations.length === 0) {
     return (
       <div className="rounded-lg border border-border bg-card p-4 shadow-sm">
         <EmptyState
@@ -58,19 +60,27 @@ export function ListView({ requests, holidays, from, to }: ListViewProps) {
     );
   }
 
+  const authorisationsByDay = new Map<string, CalendarAuthorisation[]>();
+  for (const a of authorisations) {
+    const list = authorisationsByDay.get(a.date) ?? [];
+    list.push(a);
+    authorisationsByDay.set(a.date, list);
+  }
+
   if (group === "date") {
     const days = eachDay(from, to);
     const rows = days
       .map((day: (typeof days)[number]) => ({
         day,
         off: requests.filter((r: CalendarLeave) => day >= r.startDate && day <= r.endDate),
+        auth: authorisationsByDay.get(day) ?? [],
       }))
-      .filter((r: { day: string; off: CalendarLeave[] }) => r.off.length > 0);
+      .filter((r: { day: string; off: CalendarLeave[]; auth: CalendarAuthorisation[] }) => r.off.length > 0 || r.auth.length > 0);
     return (
       <div className="rounded-lg border border-border bg-card p-4 shadow-sm">
         <GroupToggle value={group} onChange={setGroup} t={t} />
         <ul className="mt-3 divide-y divide-border">
-          {rows.map(({ day, off }: (typeof rows)[number]) => (
+          {rows.map(({ day, off, auth }: (typeof rows)[number]) => (
             <li key={day} className="flex flex-wrap items-baseline gap-x-4 gap-y-1 py-2.5 text-sm">
               <span
                 className={cn(
@@ -98,6 +108,9 @@ export function ListView({ requests, holidays, from, to }: ListViewProps) {
                     <HalfNote leave={r} />
                   </Link>
                 ))}
+                {auth.map((a: CalendarAuthorisation) => (
+                  <AuthorisationChip key={a.id} authorisation={a} />
+                ))}
               </span>
             </li>
           ))}
@@ -112,17 +125,36 @@ export function ListView({ requests, holidays, from, to }: ListViewProps) {
     list.push(r);
     byUser.set(r.userId, list);
   }
-  const users = [...byUser.entries()].sort((a: [string, CalendarLeave[]], b: [string, CalendarLeave[]]) => a[1][0]!.userName.localeCompare(b[1][0]!.userName));
+  const authByUser = new Map<string, CalendarAuthorisation[]>();
+  for (const a of authorisations) {
+    const list = authByUser.get(a.userId) ?? [];
+    list.push(a);
+    authByUser.set(a.userId, list);
+  }
+  const allUserIds = new Set([...byUser.keys(), ...authByUser.keys()]);
+  const users = [...allUserIds]
+    .map((userId) => {
+      const leave = byUser.get(userId) ?? [];
+      const auth = authByUser.get(userId) ?? [];
+      return {
+        userId,
+        name: leave[0]?.userName ?? auth[0]?.userName ?? "",
+        departmentName: leave[0]?.departmentName ?? auth[0]?.departmentName ?? "",
+        list: leave,
+        auth,
+      };
+    })
+    .sort((a: { name: string }, b: { name: string }) => a.name.localeCompare(b.name));
   return (
     <div className="rounded-lg border border-border bg-card p-4 shadow-sm">
       <GroupToggle value={group} onChange={setGroup} t={t} />
       <ul className="mt-3 divide-y divide-border">
-        {users.map(([userId, list]) => (
+        {users.map(({ userId, list, auth }) => (
           <li key={userId} className="py-2.5">
             <p className="flex items-center gap-2 text-sm font-medium text-foreground">
               <Users className="size-4 text-muted-foreground" />
-              {list[0]!.userName}
-              <span className="text-xs font-normal text-muted-foreground">{list[0]!.departmentName}</span>
+              {list[0]?.userName ?? auth[0]?.userName}
+              <span className="text-xs font-normal text-muted-foreground">{list[0]?.departmentName ?? auth[0]?.departmentName}</span>
             </p>
             <ul className="mt-1.5 space-y-1 pl-6">
               {list.map((r: CalendarLeave) => (
@@ -140,6 +172,11 @@ export function ListView({ requests, holidays, from, to }: ListViewProps) {
                   <Badge variant={statusVariant[r.status.toLowerCase()] ?? "neutral"}>
                     {tStatus(r.status)}
                   </Badge>
+                </li>
+              ))}
+              {auth.map((a: CalendarAuthorisation) => (
+                <li key={a.id} className="flex flex-wrap items-center gap-x-3 gap-y-0.5 text-sm">
+                  <AuthorisationChip authorisation={a} />
                 </li>
               ))}
             </ul>

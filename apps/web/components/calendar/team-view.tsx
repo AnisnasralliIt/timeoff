@@ -7,6 +7,7 @@ import { eachDay, todayISO } from "@timeoff/domain";
 import {
   clipLeaveToDays,
   leaveSegments,
+  type CalendarAuthorisation,
   type CalendarLeave,
   type CalendarRosterMember,
 } from "@/lib/calendar-shared";
@@ -17,6 +18,7 @@ interface TeamViewProps {
   requests: CalendarLeave[];
   roster: CalendarRosterMember[];
   holidays: string[];
+  authorisations: CalendarAuthorisation[];
   from: string;
   to: string;
 }
@@ -55,7 +57,7 @@ function monthSpans(days: string[], locale: string): MonthSpan[] {
   return spans;
 }
 
-export function TeamView({ requests, roster, holidays, from, to }: TeamViewProps) {
+export function TeamView({ requests, roster, holidays, authorisations, from, to }: TeamViewProps) {
   const locale = useLocale();
   const t = useTranslations("calendar");
   const today = todayISO();
@@ -70,6 +72,12 @@ export function TeamView({ requests, roster, holidays, from, to }: TeamViewProps
     list.push(r);
     barsByUser.set(r.userId, list);
   }
+  const authByUser = new Map<string, CalendarAuthorisation[]>();
+  for (const a of authorisations) {
+    const list = authByUser.get(a.userId) ?? [];
+    list.push(a);
+    authByUser.set(a.userId, list);
+  }
 
   const rows = roster.map((member: CalendarRosterMember) => ({
     member,
@@ -77,6 +85,7 @@ export function TeamView({ requests, roster, holidays, from, to }: TeamViewProps
       .map((leave: CalendarLeave) => ({ leave, clip: clipLeaveToDays(leave, days) }))
       .filter((b): b is { leave: CalendarLeave; clip: { start: number; end: number } } => b.clip !== null)
       .map((b: { leave: CalendarLeave; clip: { start: number; end: number } }) => ({ ...b, segs: leaveSegments(b.leave, days) })),
+    auth: authByUser.get(member.id) ?? [],
   }));
 
   const groups: {
@@ -155,7 +164,7 @@ export function TeamView({ requests, roster, holidays, from, to }: TeamViewProps
                 </div>
                 <div className="h-7 flex-1" />
               </div>
-              {group.rows.map(({ member, bars }: (typeof rows)[number]) => (
+              {group.rows.map(({ member, bars, auth }: (typeof rows)[number]) => (
                 <div key={member.id} className="flex border-b border-border last:border-b-0">
                   <div className="sticky left-0 z-10 flex w-44 shrink-0 items-center gap-1.5 border-r border-border bg-card px-3 py-1">
                     <span className="min-w-0 flex-1 truncate text-xs font-medium text-foreground">
@@ -192,6 +201,21 @@ export function TeamView({ requests, roster, holidays, from, to }: TeamViewProps
                         showLabel
                       />
                     ))}
+                    {auth.map((a: CalendarAuthorisation) => {
+                      const dayIndex = days.indexOf(a.date);
+                      if (dayIndex === -1) return null;
+                      const range =
+                        a.startTime && a.endTime ? `${a.startTime}–${a.endTime}` : t("hours", { count: a.hours });
+                      return (
+                        <span
+                          key={a.id}
+                          title={`${a.userName} · ${range}`}
+                          aria-hidden
+                          className="absolute top-0.5 size-1.5 rounded-sm border border-primary/60 bg-primary/20"
+                          style={{ left: dayIndex * DAY_WIDTH + DAY_WIDTH - 6 }}
+                        />
+                      );
+                    })}
                   </div>
                 </div>
               ))}
@@ -200,7 +224,7 @@ export function TeamView({ requests, roster, holidays, from, to }: TeamViewProps
         </div>
       </div>
       <div className="border-t border-border px-4 py-2 text-xs text-muted-foreground">
-        <CalendarLegend requests={requests} />
+        <CalendarLegend requests={requests} authorisations={authorisations} />
       </div>
     </div>
   );

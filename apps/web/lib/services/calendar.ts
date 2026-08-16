@@ -10,6 +10,7 @@ import type { SessionUser } from "@/lib/session";
 import { getVisibleUserIds } from "@/lib/permissions";
 import { LeaveError } from "@/lib/services/leave";
 import type {
+  CalendarAuthorisation,
   CalendarLeave,
   CalendarRosterMember,
   DayPartValue,
@@ -151,6 +152,45 @@ export async function listCalendarRoster(user: SessionUser): Promise<CalendarRos
     name: r.name,
     departmentId: r.departmentId,
     departmentName: r.department.name,
+  }));
+}
+
+/**
+ * Authorisation (time-range) absences for the calendar's optional layer. Only
+ * queried when the user explicitly enables the layer; scoped exactly like the
+ * leave queries. PENDING/APPROVED only, matching the leave status filter.
+ */
+export async function listCalendarAuthorisations(
+  user: SessionUser,
+  from: string,
+  to: string,
+): Promise<CalendarAuthorisation[]> {
+  const visible = await getVisibleUserIds(user);
+  const userWhere =
+    visible === "all" ? undefined : { id: { in: visible } };
+  const rows = await prisma.authorisationRequest.findMany({
+    where: {
+      companyId: user.companyId,
+      status: { in: ["APPROVED", "PENDING"] },
+      date: { gte: from, lte: to },
+      ...(userWhere ? { user: userWhere } : {}),
+    },
+    include: {
+      user: { include: { department: true } },
+    },
+    orderBy: [{ date: "asc" }, { startTime: "asc" }],
+  });
+  return rows.map((r: (typeof rows)[number]) => ({
+    id: r.id,
+    userId: r.user.id,
+    userName: r.user.name,
+    departmentId: r.user.department.id,
+    departmentName: r.user.department.name,
+    date: r.date,
+    startTime: r.startTime,
+    endTime: r.endTime,
+    hours: r.hours,
+    status: r.status as RequestStatus,
   }));
 }
 

@@ -70,6 +70,12 @@ enum IntegrationKind {
   TEAMS
 }
 
+/** Where a holiday record came from. Only informational — both behave identically. */
+enum HolidaySource {
+  MANUAL
+  NAGER_DATE
+}
+
 enum EmailMessageStatus {
   QUEUED
   SENDING
@@ -85,6 +91,10 @@ model Company {
   fiscalYearStartMonth  Int           @default(1) // leave year starts on this month, day 1
   countWeekendsWithinSpan Boolean     @default(false) // weekends inside a leave span count as leave days
   extendWeekendAfterFriday Boolean    @default(false) // Friday-ending requests also deduct the following weekend
+  countHolidaysAsVacationDays Boolean @default(false) // holidays inside a leave span count as leave days (OFF = holidays stay free)
+  halfDayEnabled          Boolean     @default(false) // half-day leave is available at all
+  halfDayStartDay         Boolean     @default(false) // the request's start date may be a half day
+  halfDayEndDay           Boolean     @default(false) // the request's end date may be a half day
   locale                String        @default("en")
   countryCode           String        @default("DE") // legal home country
   currency              String        @default("EUR")
@@ -102,6 +112,10 @@ model Company {
   integrations  Integration[]
   attachments   Attachment[]
   emailMessages EmailMessage[]
+  authorisationPolicy     AuthorisationPolicy?
+  authorisationBalances   AuthorisationBalance[]
+  authorisationRequests   AuthorisationRequest[]
+  authorisationAdjustments AuthorisationAdjustment[]
 
   @@index([domain])
 }
@@ -163,6 +177,11 @@ model User {
   delegationsReceived ApprovalDelegation[] @relation("DelegationDelegate")
   attachments Attachment[] @relation("AttachmentUploader")
   emailMessages EmailMessage[]
+  authorisationBalances   AuthorisationBalance[]
+  authorisationRequests   AuthorisationRequest[] @relation("AuthorisationOwner")
+  authorisationApprovals  AuthorisationRequest[] @relation("AuthorisationApprover")
+  authorisationCancellations AuthorisationRequest[] @relation("AuthorisationCanceller")
+  authorisationAdjustments AuthorisationAdjustment[] @relation("AuthorisationAdjustmentOwner")
 
   @@unique([companyId, email])
   @@index([email])
@@ -299,16 +318,22 @@ model LeaveRequestDay {
 }
 
 model Holiday {
-  id          String   @id @default(cuid())
+  id          String        @id @default(cuid())
   companyId   String
-  countryCode String   @default("DE")
+  countryCode String        @default("DE")
   name        String
   date        String // ISO YYYY-MM-DD; for recurring holidays this is the canonical instance
-  isRecurring Boolean  @default(false) // true = repeats every year on the same month-day
-  createdAt   DateTime @default(now())
+  isRecurring Boolean       @default(false) // true = repeats every year on the same month-day
+  source      HolidaySource @default(MANUAL) // informational origin (MANUAL | NAGER_DATE); never affects behavior
+  holidayTypes String[]     @default([]) // Nager.Date `types` (Public/Bank/School/Authorities/Optional/Observance); [] for manual
+  global      Boolean       @default(false) // Nager.Date `global` — holiday applies nationwide
+  createdAt   DateTime      @default(now())
 
   company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
 
+  // One active holiday per company/date — the unique key that makes Nager
+  // re-imports idempotent and prevents accidental duplicates.
+  @@unique([companyId, date])
   @@index([companyId, countryCode])
 }
 
@@ -488,4 +513,98 @@ model EmailMessage {
 
   @@index([status, createdAt])
   @@index([companyId])
+}
+
+/* --------------------------- Authorisations ------------------------------ */
+
+/**
+ * Company-wide "Authorisations" module (optional, OFF by default). A separate
+ * HR time-off system measured in HOURS with monthly periods, entirely
+ * independent from the vacation (leave) engine. One policy row per company.
+ * Disabling the feature never deletes data; it only hides the UI and stops new
+ * period calculations.
+ */
+model AuthorisationPolicy {
+  id          String   @id @default(cuid())
+  companyId   String   @unique
+  enabled     Boolean  @default(false) // module on/off; OFF hides UI + blocks new requests
+  monthlyAllowance      Float  @default(4) // hours granted per monthly period
+  minRequestHours       Float  @default(2)
+  maxRequestHours       Float  @default(4)
+  requestIncrementHours Float  @default(2) // requests must be a multiple of this
+  carryOverEnabled      Boolean @default(false)
+  maxCarryOverHours     Float  @default(4) // cap: never auto-granted, only actual unused hours
+  prorateFirstMonth     Boolean @default(false) // scale the joining month's allowance
+  requiresApproval      Boolean @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+}
+
+/** Monthly balance row per employee (period = "YYYY-MM"). Never accumulates. */
+model AuthorisationBalance {
+  id          String @id @default(cuid())
+  companyId   String
+  userId      String
+  period      String // "YYYY-MM"
+  granted     Float  @default(0) // this month's allowance (prorated when configured)
+  carriedOver Float  @default(0) // capped unused hours from the previous month
+  adjustment  Float  @default(0) // HR/Admin manual correction
+  used        Float  @default(0)
+  pending     Float  @default(0)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, period])
+  @@index([companyId])
+}
+
+/** A single authorisation request: one date, a number of hours. */
+model AuthorisationRequest {
+  id              String             @id @default(cuid())
+  companyId       String
+  userId          String
+  date            String // ISO YYYY-MM-DD
+  startTime       String? // "HH:MM" — same-day time range start (new requests)
+  endTime         String? // "HH:MM" — same-day time range end (new requests)
+  hours           Float // authoritative duration (end - start), deducted from the balance
+  reason          String?
+  status          LeaveRequestStatus @default(PENDING)
+  approvedById    String?
+  approvedAt      DateTime?
+  rejectionReason String?
+  cancelledById   String?
+  cancelReason    String?
+  createdAt       DateTime           @default(now())
+  updatedAt       DateTime           @updatedAt
+
+  user        User  @relation("AuthorisationOwner", fields: [userId], references: [id], onDelete: Cascade)
+  approvedBy  User? @relation("AuthorisationApprover", fields: [approvedById], references: [id])
+  cancelledBy User? @relation("AuthorisationCanceller", fields: [cancelledById], references: [id])
+  company     Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  @@index([companyId, status])
+  @@index([companyId, userId])
+  @@index([date])
+}
+
+/** Immutable ledger of manual balance adjustments (amount, reason, admin). */
+model AuthorisationAdjustment {
+  id        String   @id @default(cuid())
+  companyId String
+  userId    String
+  period    String // "YYYY-MM"
+  delta     Float
+  reason    String
+  createdAt DateTime @default(now())
+
+  user User @relation("AuthorisationAdjustmentOwner", fields: [userId], references: [id], onDelete: Cascade)
+  company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  @@index([companyId, userId])
+  @@index([userId, period])
 }

@@ -12,10 +12,13 @@
     "adminUsers": "Administration · Utilisateurs",
     "adminDepartments": "Administration · Départements",
     "adminLeaveTypes": "Administration · Types de congé et politiques",
+    "adminHolidays": "Administration · Jours fériés",
     "adminBalances": "Administration · Soldes",
     "adminSettings": "Administration · Paramètres",
     "adminAuditLog": "Administration · Journal d''audit",
-    "login": "Connexion"
+    "login": "Connexion",
+    "authorisations": "Autorisations",
+    "authorisationsNew": "Nouvelle autorisation"
   },
   "nav": {
     "sections": {
@@ -32,14 +35,14 @@
       "workforce": "Effectifs",
       "admin": "Administration",
       "auditLog": "Journal d''audit",
-      "styleGuide": "Guide de style"
+      "styleGuide": "Guide de style",
+      "authorisations": "Autorisations"
     },
     "aria": {
       "main": "Menu principal"
     }
   },
   "shell": {
-    "settings": "Paramètres",
     "signOut": "Se déconnecter",
     "accountMenu": "Menu du compte",
     "openMenu": "Ouvrir le menu",
@@ -108,7 +111,8 @@
     "nextMonth": "Mois suivant",
     "prevRange": "Période précédente",
     "nextRange": "Période suivante",
-    "unread": "Non lu"
+    "unread": "Non lu",
+    "close": "Fermer"
   },
   "timeAgo": {
     "justNow": "à l''instant",
@@ -134,7 +138,9 @@
     "upcomingLeave": "Congés à venir",
     "nothingBooked": "Rien de prévu. Une petite pause ?",
     "recentRequests": "Demandes récentes",
-    "noRequestsYet": "Aucune demande pour l''instant."
+    "noRequestsYet": "Aucune demande pour l''instant.",
+    "authorisationsBalance": "Heures d'autorisation",
+    "authorisationsPeriod": "Période mensuelle {period}"
   },
   "requests": {
     "title": "Mes demandes",
@@ -174,7 +180,9 @@
   "newRequest": {
     "title": "Demander un congé",
     "subtitle": "Les week-ends et les jours fériés de l''entreprise sont gratuits. Les demi-journées comptent pour 0,5 jour.",
-    "subtitleWeekends": "Les week-ends inclus dans la période demandée comptent comme des jours de congé. Les jours fériés de l''entreprise restent gratuits. Les demi-journées comptent pour 0,5 jour."
+    "subtitleNoHalfDays": "Les week-ends et les jours fériés de l''entreprise sont gratuits.",
+    "subtitleWeekends": "Les week-ends inclus dans la période demandée comptent comme des jours de congé. Les jours fériés de l''entreprise restent gratuits. Les demi-journées comptent pour 0,5 jour.",
+    "subtitleWeekendsNoHalfDays": "Les week-ends inclus dans la période demandée comptent comme des jours de congé. Les jours fériés de l''entreprise restent gratuits."
   },
   "requestForm": {
     "title": "Nouvelle demande",
@@ -195,6 +203,7 @@
     "selectedDays": "{count, plural, one {# jour sélectionné} other {# jours sélectionnés}}",
     "deductedDays": "{count, plural, one {# jour sera déduit} other {# jours seront déduits}}",
     "includesFollowingWeekend": "(inclut le week-end suivant selon la politique de l''entreprise)",
+    "dayPartOrderError": "La partie de fin ne peut pas être antérieure à la partie de début.",
     "submitting": "Envoi…",
     "submitRequest": "Envoyer la demande"
   },
@@ -267,7 +276,10 @@
     "statusPending": "En attente",
     "searchEmployees": "Rechercher un employé",
     "clearSearch": "Effacer la recherche",
-    "legendToday": "Aujourd''hui"
+    "legendToday": "Aujourd''hui",
+    "showAuthorisations": "Afficher les autorisations",
+    "legendAuthorisations": "Autorisations",
+    "authorisationTooltip": "{name} · {start}–{end}"
   },
   "workforce": {
     "title": "Vue d''ensemble des effectifs",
@@ -314,7 +326,25 @@
     "approvedLeaveByType": "Congé approuvé par type ({year})",
     "nothingApprovedYet": "Rien d''approuvé pour l''instant.",
     "upcomingApprovedLeave": "Congés approuvés à venir",
-    "noUpcomingApprovedLeave": "Aucun congé approuvé à venir."
+    "noUpcomingApprovedLeave": "Aucun congé approuvé à venir.",
+    "authorisationTitle": "Utilisation des autorisations",
+    "authorisationSubtitle": "Période mensuelle {month}.",
+    "authUsed": "Autorisations utilisées",
+    "authUsedHint": "Approuvées en {month}",
+    "authPending": "Autorisations en attente",
+    "authPendingHint": "En attente de décision ce mois-ci",
+    "authRemaining": "Heures restantes",
+    "authRemainingHint": "Disponibles pour cette période",
+    "authEmployees": "Employés concernés",
+    "authEmployeesHint": "Avec des heures approuvées ce mois-ci",
+    "authAverage": "Moyenne par employé",
+    "authAverageHint": "Heures d''autorisation approuvées",
+    "authGranted": "Allouées",
+    "authNoData": "Aucune activité d''autorisation ce mois-ci.",
+    "authByDepartment": "Par département",
+    "authDeptUsed": "{count, plural, one {# employé} other {# employés}} concernés",
+    "authDeptHours": "{hours} utilisées",
+    "authDeptRemaining": "{hours} restantes"
   },
   "notifications": {
     "title": "Notifications",
@@ -400,6 +430,7 @@
       "users": "Utilisateurs",
       "departments": "Départements",
       "leaveTypes": "Types de congé et politiques",
+      "holidays": "Jours fériés",
       "balances": "Soldes",
       "auditLog": "Journal d''audit",
       "settings": "Paramètres",
@@ -440,6 +471,7 @@
       "leaveRequest_cancel": "Demande de congé annulée",
       "user_create": "Utilisateur créé",
       "user_update": "Utilisateur modifié",
+      "user_password_change": "Mot de passe modifié",
       "user_delete": "Utilisateur supprimé",
       "department_create": "Département créé",
       "department_rename": "Département renommé",
@@ -456,7 +488,13 @@
       "approvalDelegation_deactivate": "Délégation désactivée",
       "integration_ical_rotate": "Jeton iCal renouvelé",
       "attachment_delete": "Pièce jointe supprimée",
-      "export_requests": "Export des congés"
+      "export_requests": "Export des congés",
+      "authorisation_policy_update": "Politique d'autorisation mise à jour",
+      "authorisation_request_create": "Demande d'autorisation créée",
+      "authorisation_request_approve": "Demande d'autorisation approuvée",
+      "authorisation_request_reject": "Demande d'autorisation refusée",
+      "authorisation_request_cancel": "Demande d'autorisation annulée",
+      "authorisation_adjust": "Solde d'autorisation ajusté"
     },
     "entityTypes": {
       "User": "Personne",
@@ -468,7 +506,10 @@
       "Company": "Entreprise",
       "ApprovalDelegation": "Délégation",
       "Integration": "Intégration",
-      "Attachment": "Pièce jointe"
+      "Attachment": "Pièce jointe",
+      "AuthorisationPolicy": "Politique d'autorisation",
+      "AuthorisationRequest": "Demande d'autorisation",
+      "AuthorisationBalance": "Solde d'autorisation"
     }
   },
   "adminUsers": {
@@ -521,6 +562,55 @@
     "noTypes": "Aucun type de congé pour le moment.",
     "noPolicies": "Aucune politique pour ce type de congé."
   },
+  "adminHolidays": {
+    "title": "Jours fériés",
+    "description": "Jours chômés pour toute l''entreprise. Ils comptent automatiquement comme des jours de vacances et bloquent les demandes et les calendriers.",
+    "count": "{count, plural, one {# jour férié} other {# jours fériés}}",
+    "allYears": "Toutes les années",
+    "date": "Date",
+    "holiday": "Jour férié",
+    "type": "Type",
+    "source": "Source",
+    "actions": "Actions",
+    "recurring": "chaque année",
+    "national": "National",
+    "sourceNager": "Nager.Date",
+    "sourceManual": "Manuel",
+    "empty": "Aucun jour férié pour le moment. Ajoutez-en un manuellement ou importez-les depuis Nager.Date.",
+    "noYearHolidays": "Aucun jour férié en {year}."
+  },
+  "nagerImport": {
+    "trigger": "Importer depuis Nager.Date",
+    "title": "Importer des jours fériés",
+    "description": "Récupérez les jours fériés officiels d''un pays et d''une année, puis choisissez ceux à ajouter. Les jours fériés existants ne sont jamais écrasés.",
+    "country": "Pays",
+    "countryPlaceholder": "Choisir un pays",
+    "year": "Année",
+    "fetch": "Récupérer les jours fériés",
+    "fetching": "Récupération…",
+    "previewTitle": "Jours fériés {year} pour {country}",
+    "returnedCount": "{count, plural, one {# jour férié renvoyé} other {# jours fériés renvoyés}}",
+    "selectAll": "Tout sélectionner",
+    "deselectAll": "Tout désélectionner",
+    "date": "Date",
+    "holiday": "Jour férié",
+    "type": "Type",
+    "national": "National",
+    "yes": "Oui",
+    "fetched": "Récupérés",
+    "selected": "Sélectionnés",
+    "alreadyExisting": "Déjà existants",
+    "new": "Nouveaux",
+    "importSelected": "Ajouter {count, plural, one {# jour férié} other {# jours fériés}}",
+    "fetchAgain": "Récupérer à nouveau",
+    "importCompleted": "Import terminé",
+    "countryLabel": "Pays",
+    "yearLabel": "Année",
+    "created": "Ajoutés",
+    "existing": "Existaient déjà",
+    "skipped": "Ignorés",
+    "failed": "Échecs"
+  },
   "adminBalances": {
     "count": "{count, plural, one {# ligne de solde} other {# lignes de solde}}{selected, select, true { pour la personne sélectionnée.} other {.}}",
     "title": "Soldes de congés",
@@ -555,6 +645,14 @@
     "countWeekendsHint": "Lorsque cette option est activée, les week-ends inclus dans la période demandée comptent comme des jours de congé ; seuls les jours fériés de l''entreprise restent gratuits. Les demandes existantes conservent leur nombre de jours enregistré.",
     "extendWeekendLabel": "Étendre les demandes se terminant un vendredi au week-end",
     "extendWeekendHint": "Lorsque cette option est activée, une demande se terminant un vendredi déduit également le samedi et le dimanche suivants, même si seuls les jours ouvrés ont été sélectionnés. Un week-end n''est jamais ajouté avant un début de semaine le lundi.",
+    "countHolidaysLabel": "Compter les jours fériés comme des jours de congé",
+    "countHolidaysHint": "Choisissez si un jour férié tombant dans une période de congé est déduit du solde de congés. Lorsque l''option est activée, les jours fériés inclus dans une période de congé comptent comme des jours de congé ; lorsqu''elle est désactivée, ils sont exclus de la déduction. Les week-ends ne sont jamais concernés.",
+    "halfDayEnabledLabel": "Option demi-journée",
+    "halfDayEnabledHint": "Contrôle si les congés en demi-journée sont disponibles. Lorsqu''elle est désactivée, toutes les demandes comptent des journées entières uniquement.",
+    "halfDayStartDayLabel": "Demi-journée de début",
+    "halfDayStartDayHint": "Lorsqu''elle est activée, la date de début d''une demande peut être une demi-journée (matin ou après-midi).",
+    "halfDayEndDayLabel": "Demi-journée de fin",
+    "halfDayEndDayHint": "Lorsqu''elle est activée, la date de fin d''une demande peut être une demi-journée (matin ou après-midi).",
     "calculatorTitle": "Calculateur des règles de week-end",
     "calculatorDescription": "Aperçu du nombre de jours déduits pour n''importe quelle période selon les paramètres enregistrés — avant qu''une vraie demande ne soit soumise.",
     "calculatorStart": "Date de début",
@@ -641,7 +739,8 @@
     "requestCancelled": "Demande annulée.",
     "attachmentAdded": "Pièce jointe ajoutée.",
     "fileRemoved": "Fichier supprimé.",
-    "exportSuccess": "Export Excel téléchargé."
+    "exportSuccess": "Export Excel téléchargé.",
+    "authorisationRequested": "Autorisation demandée."
   },
   "adminDialogs": {
     "createUser": {
@@ -671,6 +770,19 @@
       "trigger": "Modifier",
       "saving": "Enregistrement…",
       "saveChanges": "Enregistrer les modifications"
+    },
+    "changePassword": {
+      "trigger": "Changer le mot de passe",
+      "title": "Changer le mot de passe",
+      "description": "Définissez un nouveau mot de passe pour {name}. L''ancien mot de passe cesse de fonctionner immédiatement.",
+      "newPassword": "Nouveau mot de passe",
+      "confirmPassword": "Confirmer le mot de passe",
+      "passwordPlaceholder": "Au moins 8 caractères",
+      "repeatPassword": "Répétez le nouveau mot de passe",
+      "passwordMismatch": "Les mots de passe ne correspondent pas.",
+      "changing": "Modification…",
+      "changePassword": "Changer le mot de passe",
+      "success": "Mot de passe modifié."
     },
     "department": {
       "createTrigger": "Ajouter un département",
@@ -722,6 +834,36 @@
       "requestsNeedAttachment": "Les demandes nécessitent une pièce jointe",
       "savePolicy": "Enregistrer la politique"
     },
+    "holiday": {
+      "createTrigger": "Ajouter un jour férié",
+      "createTitle": "Ajouter un jour férié",
+      "createDescription": "Un jour chômé pour toute l''entreprise. Il compte automatiquement comme un jour de vacances et bloque les demandes et les calendriers.",
+      "name": "Nom",
+      "date": "Date",
+      "namePlaceholder": "ex. Jour de l''An",
+      "type": {
+        "label": "Type",
+        "Public": "Jour férié",
+        "Bank": "Jour férié bancaire",
+        "School": "Vacances scolaires",
+        "Authorities": "Jour férié administratif",
+        "Optional": "Jour férié facultatif",
+        "Observance": "Commémoration"
+      },
+      "typePlaceholder": "Aucun type",
+      "create": "Ajouter le jour férié",
+      "creating": "Ajout…",
+      "editTrigger": "Modifier",
+      "editTitle": "Modifier le jour férié",
+      "editDescription": "Modifier le nom, la date ou le type met aussi à jour les rapports et calendriers qui utilisent ce jour férié.",
+      "save": "Enregistrer les modifications",
+      "saving": "Enregistrement…",
+      "deleteTrigger": "Supprimer",
+      "deleteTitle": "Supprimer {name} ?",
+      "deleteDescription": "Il sera retiré des calendriers et ne bloquera plus les demandes de vacances. Cette action est irréversible.",
+      "deleteConfirm": "Supprimer le jour férié",
+      "deleting": "Suppression…"
+    },
     "balance": {
       "trigger": "Ajuster le solde",
       "title": "Ajuster un solde",
@@ -764,7 +906,18 @@
     "declinedBody": "Votre congé {type} à partir du {start} a été refusé{reason, select, none {.} other { : {reason}}}",
     "daysAddedTitle": "Jours de congé ajoutés",
     "daysRemovedTitle": "Jours de congé retirés",
-    "balanceBody": "{sign}{delta} {type} jour(s){reason, select, none {.} other { — {reason}.}}"
+    "balanceBody": "{sign}{delta} {type} jour(s){reason, select, none {.} other { — {reason}.}}",
+    "authorisationRequestFrom": "Demande d'autorisation de {name}",
+    "authorisationApproved": "Autorisation approuvée",
+    "authorisationDeclined": "Autorisation refusée",
+    "authorisationHoursAdded": "Heures d'autorisation ajoutées",
+    "authorisationHoursRemoved": "Heures d'autorisation retirées",
+    "authorisationBody": "{date} · {count, plural, one {# heure} other {# heures}}",
+    "authorisationBodyReason": "{date} · {count, plural, one {# heure} other {# heures}} — {reason}",
+    "authorisationBalanceAdded": "+{count} heures d'autorisation ajoutées.",
+    "authorisationBalanceRemoved": "{count} heures d'autorisation retirées.",
+    "authorisationBalanceAddedReason": "+{count} heures d'autorisation ajoutées — {reason}.",
+    "authorisationBalanceRemovedReason": "{count} heures d'autorisation retirées — {reason}."
   },
   "errors": {
     "pickValidDates": "Choisissez des dates de début et de fin valides.",
@@ -775,6 +928,12 @@
     "rangeStartAfterEnd": "La date de début {start} est après la date de fin {end}",
     "noWorkingDays": "L''intervalle {start}..{end} ne contient aucun jour ouvré",
     "cannotSplitHalfDay": "Un jour ouvré unique ne peut pas être divisé en deux demi-journées",
+    "endBeforeStart": "La partie de fin ne peut pas être antérieure à la partie de début.",
+    "halfDayDisabled": "Les congés en demi-journée ne sont pas activés pour votre entreprise.",
+    "halfDayStartDisabled": "Les demi-journées de début ne sont pas autorisées par la politique de l''entreprise.",
+    "halfDayEndDisabled": "Les demi-journées de fin ne sont pas autorisées par la politique de l''entreprise.",
+    "passwordMismatch": "Les mots de passe ne correspondent pas.",
+    "onlySuperAdminResetPrivileged": "Seul un SUPER_ADMIN peut réinitialiser le mot de passe des utilisateurs privilégiés.",
     "overlapsOwnRequest": "Cette demande chevauche une demande déjà soumise.",
     "insufficientBalance": "Solde insuffisant : {available, plural, one {# jour disponible} other {# jours disponibles}}, {requested} demandés.",
     "carriedOverExpiry": "Les jours reportés doivent être utilisés avant le {expiry} — terminez la demande au plus tard à cette date.",
@@ -839,6 +998,112 @@
     "storageUnavailable": "Le stockage de fichiers est indisponible pour le moment.",
     "exportForbidden": "Vous n''avez pas la permission d''exporter les données de congés.",
     "invalidExportRange": "Choisissez une plage de dates valide à exporter.",
-    "invalidExportRequest": "La demande d''export n''a pas été comprise."
+    "invalidExportRequest": "La demande d''export n''a pas été comprise.",
+    "authorisationsDisabled": "Les autorisations ne sont pas activées pour votre entreprise.",
+    "authorisationInvalidDate": "Choisissez une date valide.",
+    "authorisationCurrentMonthOnly": "Les autorisations ne peuvent être demandées que pour la période mensuelle en cours.",
+    "authorisationHoursNotPositive": "Les heures doivent être un nombre positif.",
+    "authorisationNoBalance": "Aucun solde d'autorisation disponible pour l'instant.",
+    "authorisationPolicyAllowance": "L'allocation mensuelle doit être un nombre positif.",
+    "authorisationPolicyMinHours": "La demande minimale doit être un nombre positif.",
+    "authorisationPolicyMaxHours": "La demande maximale ne peut pas être inférieure au minimum.",
+    "authorisationPolicyIncrement": "L'incrément de demande doit être un nombre positif.",
+    "authorisationPolicyCarryOver": "Le report maximal ne peut pas être négatif.",
+    "authorisationBelowMinimum": "La demande minimale est de {min} heures.",
+    "authorisationAboveMaximum": "La demande maximale est de {max} heures.",
+    "authorisationNotIncrement": "Les demandes doivent être un multiple de {increment} heures.",
+    "authorisationInsufficientBalance": "Heures insuffisantes : {available} disponibles, {requested} demandées.",
+    "authorisationAdjustmentBelowZero": "L'ajustement ferait passer le solde sous zéro (actuellement {available} h).",
+    "holidayNameRequired": "Le nom du jour férié est requis.",
+    "holidayInvalidDate": "Choisissez une date de jour férié valide.",
+    "holidayDateExists": "Un jour férié existe déjà à cette date.",
+    "holidayNotFound": "Jour férié introuvable.",
+    "nagerInvalidCountry": "Ce code pays n''est pas pris en charge.",
+    "nagerInvalidYear": "Choisissez une année entre 1900 et 2100.",
+    "nagerInvalidData": "Les données de jours fériés renvoyées par Nager.Date n''ont pas pu être interprétées.",
+    "nagerUnreachable": "Nager.Date est injoignable. Réessayez plus tard.",
+    "nagerNoHolidays": "Aucun jour férié renvoyé pour ce pays et cette année.",
+    "nagerNoSelection": "Sélectionnez au moins un jour férié à importer."
+  },
+  "authorisations": {
+    "title": "Autorisations",
+    "subtitle": "Période mensuelle {period}",
+    "newRequest": "Nouvelle demande",
+    "disabledTitle": "Autorisations désactivées",
+    "disabledDescription": "Demandez à votre administrateur d'activer le module d'autorisations.",
+    "balanceTitle": "Solde du mois",
+    "balanceSubtitle": "Heures disponibles pour cette période mensuelle.",
+    "available": "Disponibles",
+    "granted": "Allouées",
+    "carriedOver": "Reportées",
+    "used": "Utilisées",
+    "pending": "En attente",
+    "hours": "{count, plural, =0 {# heures} one {# heure} other {# heures}}",
+    "items": "{count, plural, =0 {# éléments} one {# élément} other {# éléments}}",
+    "noBalanceYet": "Votre solde apparaîtra dès le début de votre période mensuelle.",
+    "upcomingTitle": "À venir",
+    "nothingUpcoming": "Rien de prévu.",
+    "recentTitle": "Demandes récentes",
+    "noRequestsYet": "Aucune demande pour l'instant.",
+    "historyTitle": "Historique",
+    "historySubtitle": "Votre solde par période mensuelle.",
+    "noHistoryYet": "Aucun historique pour l'instant.",
+    "currentPeriod": "Période en cours",
+    "adjustment": "Ajustement",
+    "newTitle": "Nouvelle demande d'autorisation",
+    "newSubtitle": "Période {period}",
+    "date": "Date",
+    "hoursField": "Heures",
+    "hoursHint": "Entre {min} et {max} heures, par pas de {increment}.",
+    "belowMinimum": "La demande minimale est de {min} heures.",
+    "aboveMaximum": "La demande maximale est de {max} heures.",
+    "notIncrement": "Les demandes doivent être un multiple de {increment} heures.",
+    "insufficient": "Seulement {available} heures disponibles, {requested} demandées.",
+    "reason": "Motif",
+    "reasonHint": "Facultatif — visible par votre approbateur.",
+    "submitting": "Envoi…",
+    "submit": "Envoyer la demande",
+    "startTime": "Heure de début",
+    "endTime": "Heure de fin",
+    "duration": "Durée",
+    "endNotAfterStart": "L'heure de fin doit être après l'heure de début.",
+    "minimumAdjusted": "Durée minimale : {min} heures. Heure de fin ajustée à {end}.",
+    "notEnoughTime": "Pas assez de temps dans la journée pour atteindre le minimum de {min} heures.",
+    "rangeHint": "De {start} à {end} ({min}–{max} heures).",
+    "pendingApprovalsTitle": "Approbations d'autorisation",
+    "pendingApprovalsDescription": "Autorisations basées sur le temps qui attendent votre décision."
+  },
+  "authorisationsPolicy": {
+    "title": "Autorisations",
+    "description": "Basé sur les heures, périodes mensuelles. Activer le module ne supprime jamais de données.",
+    "enabledLabel": "Activer les autorisations",
+    "enabledHint": "Les employés peuvent demander du temps libre en heures chaque mois.",
+    "monthlyAllowanceLabel": "Allocation mensuelle (h)",
+    "monthlyAllowanceHint": "Heures allouées chaque mois.",
+    "maxCarryOverLabel": "Report maximum",
+    "maxCarryOverHint": "Nombre maximum d''heures d''autorisation non utilisées pouvant être reportées à la période suivante.",
+    "minHoursLabel": "Minimum par demande (h)",
+    "minHoursHint": "Plus petite demande autorisée.",
+    "maxHoursLabel": "Maximum par demande (h)",
+    "maxHoursHint": "Plus grande demande autorisée.",
+    "incrementLabel": "Incrément (h)",
+    "incrementHint": "Les demandes doivent être un multiple de ce montant.",
+    "prorateJoiningLabel": "Proratiser le mois d'embauche",
+    "prorateJoiningHint": "L'allocation du premier mois est réduite selon les jours restants, le jour d'embauche comptant.",
+    "carryOverEnabledLabel": "Reporter les heures non utilisées",
+    "carryOverEnabledHint": "Les heures non utilisées passent au mois suivant, plafonnées au maximum.",
+    "requiresApprovalLabel": "Exiger une approbation",
+    "requiresApprovalHint": "Les demandes doivent être approuvées avant d'être comptées comme utilisées. Désactivé : les demandes sont approuvées instantanément."
+  },
+  "authorisationsAdjust": {
+    "trigger": "Ajuster le solde",
+    "title": "Ajuster le solde d'autorisation",
+    "description": "Ajouter ou retirer des heures pour la période mensuelle en cours.",
+    "user": "Employé",
+    "hours": "Heures",
+    "hoursHint": "Positif ajoute, négatif retire.",
+    "reason": "Motif",
+    "applying": "Application…",
+    "apply": "Appliquer"
   }
 }

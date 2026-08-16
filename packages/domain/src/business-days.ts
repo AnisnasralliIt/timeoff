@@ -4,11 +4,13 @@
  * ISO dates; callers resolve recurring holidays before calling these helpers.
  *
  * When `countWeekendsWithinSpan` is enabled (company-wide leave-duration
- * setting), weekends inside a span count as leave days — only holidays are
- * excluded. `extendWeekendAfterFriday` adds the weekend after a Friday-ending
- * span to the deduction total (see leave-days). Every consumer (span expansion,
- * overlap, previews, exports) reads these options from this one module, so the
- * company settings are always applied consistently.
+ * setting), weekends inside a span count as leave days. By default holidays
+ * are always excluded (free days); when `countHolidaysAsVacationDays` is
+ * enabled they count as leave days too. `extendWeekendAfterFriday` adds the
+ * weekend after a Friday-ending span to the deduction total (see leave-days).
+ * Every consumer (span expansion, overlap, previews, exports) reads these
+ * options from this one module, so the company settings are always applied
+ * consistently.
  */
 import { assertValidRange, eachDay, isValidISODate, parseISO, toISO } from "./dates";
 
@@ -17,6 +19,13 @@ export interface CalendarOptions {
   holidays?: ReadonlySet<string>;
   /** Count weekends inside leave spans as leave days (default: false). */
   countWeekendsWithinSpan?: boolean;
+  /**
+   * Count holidays inside leave spans as leave days (default: false). When
+   * off, a holiday is never deducted (it stays free); when on, holidays
+   * contribute to the vacation duration. Never affects weekends — a holiday
+   * that falls on a weekend follows the weekend rule.
+   */
+  countHolidaysAsVacationDays?: boolean;
   /**
    * Add the following Saturday and Sunday to the deduction total when a span
    * ends on a Friday (default: false). Only affects `totalDays` — the expanded
@@ -39,8 +48,16 @@ export function isHoliday(value: string, holidays: ReadonlySet<string>): boolean
 }
 
 export function isWorkingDay(value: string, options: CalendarOptions = {}): boolean {
-  if (!options.countWeekendsWithinSpan && isWeekendISO(value)) return false;
-  return options.holidays ? !isHoliday(value, options.holidays) : true;
+  const isWeekend = isWeekendISO(value);
+  if (isWeekend && !options.countWeekendsWithinSpan) return false;
+  // A weekend date always follows the weekend rule: when weekends count, the
+  // day counts regardless of the holiday setting, and vice versa. This keeps a
+  // holiday that happens to fall on a weekend out of the holiday-counting rule.
+  if (isWeekend) return true;
+  if (options.holidays && isHoliday(value, options.holidays) && !options.countHolidaysAsVacationDays) {
+    return false;
+  }
+  return true;
 }
 
 /** Every working day in `[start, end]`, inclusive, in chronological order. */

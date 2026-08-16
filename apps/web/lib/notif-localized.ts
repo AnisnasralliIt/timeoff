@@ -15,11 +15,16 @@ interface Pattern {
 
 const TITLE_PATTERNS: Pattern[] = [
   { re: /^Leave request from (.+)$/, key: "requestFrom", values: ["name"] },
+  { re: /^Authorisation request from (.+)$/, key: "authorisationRequestFrom", values: ["name"] },
   { re: /^Approval step complete$/, key: "approvalStepComplete", values: [] },
   { re: /^Leave approved$/, key: "approved", values: [] },
+  { re: /^Authorisation approved$/, key: "authorisationApproved", values: [] },
   { re: /^Leave request declined$/, key: "declined", values: [] },
+  { re: /^Authorisation declined$/, key: "authorisationDeclined", values: [] },
   { re: /^Leave days added$/, key: "daysAdded", values: [] },
   { re: /^Leave days removed$/, key: "daysRemoved", values: [] },
+  { re: /^Authorisation hours added$/, key: "authorisationHoursAdded", values: [] },
+  { re: /^Authorisation hours removed$/, key: "authorisationHoursRemoved", values: [] },
 ];
 
 const BODY_PATTERNS: Pattern[] = [
@@ -40,6 +45,9 @@ const BODY_PATTERNS: Pattern[] = [
   { re: /^Your (.+) from (.+) was declined: (.+)\.$/, key: "bodyDeclinedReason", values: ["leaveType", "start", "reason"] },
   { re: /^Your (.+) from (.+) was declined\.$/, key: "bodyDeclined", values: ["leaveType", "start"] },
   { re: /^([+-][\d.]+) (.+) day[s]?(?: — (.+))?\.$/, key: "bodyBalance", values: ["delta", "leaveType", "reason"] },
+  { re: /^(.+?) · ([\d.]+) h — (.+)$/, key: "authorisationBodyReason", values: ["date", "count", "reason"] },
+  { re: /^(.+?) · ([\d.]+) h$/, key: "authorisationBody", values: ["date", "count"] },
+  { re: /^([+-][\d.]+) h(?: — (.+))?\.$/, key: "authorisationBalance", values: ["delta", "reason"] },
 ];
 
 /**
@@ -90,6 +98,18 @@ export function useNotifLocalized() {
               : hasReason
                 ? "bodyBalanceRemovedReason"
                 : "bodyBalanceRemoved";
+            outBody = t(key, values);
+          } else if (pattern.key === "authorisationBalance") {
+            const delta = String(values.delta ?? "");
+            const hasReason = "reason" in values && values.reason !== "";
+            values.count = Math.abs(Number(delta));
+            const key = delta.startsWith("+")
+              ? hasReason
+                ? "authorisationBalanceAddedReason"
+                : "authorisationBalanceAdded"
+              : hasReason
+                ? "authorisationBalanceRemovedReason"
+                : "authorisationBalanceRemoved";
             outBody = t(key, values);
           } else {
             outBody = t(pattern.key, values);

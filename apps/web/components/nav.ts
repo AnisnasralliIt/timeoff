@@ -8,6 +8,7 @@ import {
   Users,
   Palette,
   History,
+  Clock,
   type LucideIcon,
 } from "lucide-react";
 
@@ -19,6 +20,8 @@ export type NavItem = {
   /** Role-gated; `undefined` means visible to all authenticated users. */
   minRole?: "approver" | "insights" | "people-ops" | "super-admin" | "audit";
   badge?: number;
+  /** Feature-gated; hidden unless the company enabled the module. */
+  featureFlag?: "authorisations";
 };
 
 export type NavSection = {
@@ -33,6 +36,7 @@ export const navSections: NavSection[] = [
     items: [
       { labelKey: "dashboard", href: "/dashboard", icon: LayoutDashboard },
       { labelKey: "requests", href: "/requests", icon: Inbox },
+      { labelKey: "authorisations", href: "/authorisations", icon: Clock, featureFlag: "authorisations" },
       { labelKey: "calendar", href: "/calendar", icon: CalendarDays },
       { labelKey: "approvals", href: "/approvals", icon: ClipboardCheck, minRole: "approver" },
       { labelKey: "notifications", href: "/notifications", icon: Bell },

@@ -7,6 +7,8 @@ import {
   CalendarClock,
   CalendarDays,
   ClipboardCheck,
+  Clock,
+  Hourglass,
   Sun,
   UserCheck,
   Users,
@@ -70,6 +72,7 @@ export default async function WorkforcePage({
   const user = await requireRole(["EXECUTIVE", "HR", "ADMIN", "MANAGER"]);
   const params = await searchParams;
   const t = await getTranslations("workforce");
+  const tAuth = await getTranslations("authorisations");
   const tCommon = await getTranslations("common");
   const locale = await getLocale();
   const today = todayISO();
@@ -156,6 +159,40 @@ export default async function WorkforcePage({
           stats.lowBalanceCount,
           t("lowBalanceHint", { threshold: stats.lowBalanceThreshold }),
         )}
+        {stats.authorisations?.enabled ? (
+          <>
+            {statCard(
+              <Clock className="size-4" />,
+              t("authUsed"),
+              tAuth("hours", { count: stats.authorisations.used }),
+              t("authUsedHint", { month: monthLabel(stats.authorisations.month, locale) }),
+            )}
+            {statCard(
+              <Hourglass className="size-4" />,
+              t("authPending"),
+              tAuth("hours", { count: stats.authorisations.pending }),
+              t("authPendingHint"),
+            )}
+            {statCard(
+              <Wallet className="size-4" />,
+              t("authRemaining"),
+              tAuth("hours", { count: stats.authorisations.remaining }),
+              t("authRemainingHint"),
+            )}
+            {statCard(
+              <Users className="size-4" />,
+              t("authEmployees"),
+              stats.authorisations.employeesUsing,
+              t("authEmployeesHint"),
+            )}
+            {statCard(
+              <Clock className="size-4" />,
+              t("authAverage"),
+              tAuth("hours", { count: stats.authorisations.averageHours }),
+              t("authAverageHint"),
+            )}
+          </>
+        ) : null}
       </div>
 
       <div className="grid gap-6 lg:grid-cols-2">
@@ -419,6 +456,75 @@ export default async function WorkforcePage({
           )}
         </section>
       </div>
+
+      {stats.authorisations?.enabled ? (
+        <section className="rounded-lg border border-border bg-card p-4 shadow-sm">
+          <div className="flex flex-wrap items-baseline justify-between gap-2">
+            <h2 className="font-display text-base font-semibold text-foreground">
+              {t("authorisationTitle")}
+            </h2>
+            <p className="text-xs text-muted-foreground">
+              {t("authorisationSubtitle", { month: monthLabel(stats.authorisations.month, locale) })}
+            </p>
+          </div>
+          {stats.authorisations.granted === 0 &&
+          stats.authorisations.used === 0 &&
+          stats.authorisations.pending === 0 ? (
+            <p className="mt-3 text-sm text-muted-foreground">{t("authNoData")}</p>
+          ) : (
+            <>
+              <dl className="mt-3 grid grid-cols-2 gap-4 sm:grid-cols-4">
+                <div>
+                  <dt className="text-xs text-muted-foreground">{t("authGranted")}</dt>
+                  <dd className="mt-0.5 font-display text-xl font-semibold text-foreground">
+                    {tAuth("hours", { count: stats.authorisations.granted })}
+                  </dd>
+                </div>
+                <div>
+                  <dt className="text-xs text-muted-foreground">{t("authUsed")}</dt>
+                  <dd className="mt-0.5 font-display text-xl font-semibold text-foreground">
+                    {tAuth("hours", { count: stats.authorisations.used })}
+                  </dd>
+                </div>
+                <div>
+                  <dt className="text-xs text-muted-foreground">{t("authPending")}</dt>
+                  <dd className="mt-0.5 font-display text-xl font-semibold text-foreground">
+                    {tAuth("hours", { count: stats.authorisations.pending })}
+                  </dd>
+                </div>
+                <div>
+                  <dt className="text-xs text-muted-foreground">{t("authRemaining")}</dt>
+                  <dd className="mt-0.5 font-display text-xl font-semibold text-foreground">
+                    {tAuth("hours", { count: stats.authorisations.remaining })}
+                  </dd>
+                </div>
+              </dl>
+
+              {stats.authorisations.byDepartment.length > 0 ? (
+                <div className="mt-4">
+                  <h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                    {t("authByDepartment")}
+                  </h3>
+                  <ul className="mt-2 divide-y divide-border">
+                    {stats.authorisations.byDepartment.map((department) => (
+                      <li key={department.id} className="flex flex-wrap items-center justify-between gap-2 py-2 text-sm">
+                        <span className="font-medium text-foreground">{department.name}</span>
+                        <span className="text-xs text-muted-foreground">
+                          {t("authDeptUsed", { count: department.employees })}
+                          <span className="mx-1.5">·</span>
+                          {t("authDeptHours", { hours: tAuth("hours", { count: department.used }) })}
+                          <span className="mx-1.5">·</span>
+                          {t("authDeptRemaining", { hours: tAuth("hours", { count: department.remaining }) })}
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              ) : null}
+            </>
+          )}
+        </section>
+      ) : null}
 
       <section className="rounded-lg border border-border bg-card p-4 shadow-sm">
         <div className="flex flex-wrap items-center justify-between gap-3">

@@ -5,6 +5,7 @@ import { prisma } from "@timeoff/db";
 import { addDaysISO, eachDay, todayISO } from "@timeoff/domain";
 import { requireAuth } from "@/lib/session";
 import { canExport, listCalendarRoster, listCalendarRequests } from "@/lib/services/calendar";
+import { getAuthorisationPolicy } from "@/lib/services/authorisations";
 import { getUserScope, getVisibleUserIds } from "@/lib/permissions";
 import { staffingWarnings } from "@/lib/calendar-shared";
 import { CalendarExplorer } from "@/components/calendar/explorer";
@@ -44,6 +45,11 @@ export default async function CalendarPage() {
       orderBy: { sortOrder: "asc" },
     }),
   ]);
+
+  // The optional authorisations layer is only offered when the module is on;
+  // when off the toggle is hidden and the calendar never queries the data.
+  const authorisationPolicy = await getAuthorisationPolicy(prisma, user.companyId!);
+  const authorisationsEnabled = authorisationPolicy?.enabled === true;
 
   const departments = showDepartmentFilter
     ? allDepartments.map((d: (typeof allDepartments)[number]) => ({ id: d.id, name: d.name }))
@@ -126,6 +132,7 @@ export default async function CalendarPage() {
             canExport={canExport(user)}
             showDepartmentFilter={showDepartmentFilter}
             departments={departments}
+            authorisationsEnabled={authorisationsEnabled}
             leaveTypes={leaveTypes.map((lt: (typeof leaveTypes)[number]) => ({
               id: lt.id,
               name: lt.name,

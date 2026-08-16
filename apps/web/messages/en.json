@@ -12,10 +12,13 @@
     "adminUsers": "Admin · Users",
     "adminDepartments": "Admin · Departments",
     "adminLeaveTypes": "Admin · Leave types & policies",
+    "adminHolidays": "Admin · Holidays",
     "adminBalances": "Admin · Balances",
     "adminSettings": "Admin · Settings",
     "adminAuditLog": "Admin · Audit log",
-    "login": "Sign in"
+    "login": "Sign in",
+    "authorisations": "Authorisations",
+    "authorisationsNew": "New authorisation"
   },
   "nav": {
     "sections": {
@@ -32,14 +35,14 @@
       "workforce": "Workforce",
       "admin": "Admin",
       "auditLog": "Audit log",
-      "styleGuide": "Style guide"
+      "styleGuide": "Style guide",
+      "authorisations": "Authorisations"
     },
     "aria": {
       "main": "Main"
     }
   },
   "shell": {
-    "settings": "Settings",
     "signOut": "Sign out",
     "accountMenu": "Account menu",
     "openMenu": "Open menu",
@@ -94,8 +97,8 @@
   },
   "dayPart": {
     "FULL": "Full day",
-    "FIRST_HALF": "First half (morning)",
-    "SECOND_HALF": "Second half (afternoon)"
+    "FIRST_HALF": "Morning",
+    "SECOND_HALF": "Afternoon"
   },
   "common": {
     "cancel": "Cancel",
@@ -108,7 +111,8 @@
     "nextMonth": "Next month",
     "prevRange": "Previous period",
     "nextRange": "Next period",
-    "unread": "Unread"
+    "unread": "Unread",
+    "close": "Close"
   },
   "timeAgo": {
     "justNow": "just now",
@@ -134,7 +138,9 @@
     "upcomingLeave": "Upcoming leave",
     "nothingBooked": "Nothing booked. Time for that holiday?",
     "recentRequests": "Recent requests",
-    "noRequestsYet": "No requests yet."
+    "noRequestsYet": "No requests yet.",
+    "authorisationsBalance": "Authorisation hours",
+    "authorisationsPeriod": "Monthly period {period}"
   },
   "requests": {
     "title": "My requests",
@@ -174,7 +180,9 @@
   "newRequest": {
     "title": "Request leave",
     "subtitle": "Weekends and company holidays are free. Half days count as 0.5 days.",
-    "subtitleWeekends": "Weekends inside your requested range count as leave days. Company holidays stay free. Half days count as 0.5 days."
+    "subtitleNoHalfDays": "Weekends and company holidays are free.",
+    "subtitleWeekends": "Weekends inside your requested range count as leave days. Company holidays stay free. Half days count as 0.5 days.",
+    "subtitleWeekendsNoHalfDays": "Weekends inside your requested range count as leave days. Company holidays stay free."
   },
   "requestForm": {
     "title": "New request",
@@ -195,6 +203,7 @@
     "selectedDays": "{count, plural, one {# day selected} other {# days selected}}",
     "deductedDays": "{count, plural, one {# day will be deducted} other {# days will be deducted}}",
     "includesFollowingWeekend": "(includes the following weekend per company policy)",
+    "dayPartOrderError": "The end day part cannot be earlier than the start day part.",
     "submitting": "Submitting…",
     "submitRequest": "Submit request"
   },
@@ -267,7 +276,10 @@
     "statusPending": "Pending",
     "searchEmployees": "Search employees",
     "clearSearch": "Clear search",
-    "legendToday": "Today"
+    "legendToday": "Today",
+    "showAuthorisations": "Show authorisations",
+    "legendAuthorisations": "Authorisations",
+    "authorisationTooltip": "{name} · {start}–{end}"
   },
   "workforce": {
     "title": "Workforce overview",
@@ -314,7 +326,25 @@
     "approvedLeaveByType": "Approved leave by type ({year})",
     "nothingApprovedYet": "Nothing approved yet.",
     "upcomingApprovedLeave": "Upcoming approved leave",
-    "noUpcomingApprovedLeave": "No upcoming approved leave."
+    "noUpcomingApprovedLeave": "No upcoming approved leave.",
+    "authorisationTitle": "Authorisation usage",
+    "authorisationSubtitle": "Monthly period {month}.",
+    "authUsed": "Authorisations used",
+    "authUsedHint": "Approved in {month}",
+    "authPending": "Pending authorisations",
+    "authPendingHint": "Awaiting a decision this month",
+    "authRemaining": "Hours remaining",
+    "authRemainingHint": "Available for this period",
+    "authEmployees": "Employees using",
+    "authEmployeesHint": "With approved hours this month",
+    "authAverage": "Average per employee",
+    "authAverageHint": "Of approved authorisation hours",
+    "authGranted": "Granted",
+    "authNoData": "No authorisation activity this month.",
+    "authByDepartment": "By department",
+    "authDeptUsed": "{count, plural, one {# employee} other {# employees}} using",
+    "authDeptHours": "{hours} used",
+    "authDeptRemaining": "{hours} remaining"
   },
   "notifications": {
     "title": "Notifications",
@@ -400,6 +430,7 @@
       "users": "Users",
       "departments": "Departments",
       "leaveTypes": "Leave types & policies",
+      "holidays": "Holidays",
       "balances": "Balances",
       "auditLog": "Audit log",
       "settings": "Settings",
@@ -440,6 +471,7 @@
       "leaveRequest_cancel": "Leave request cancelled",
       "user_create": "User created",
       "user_update": "User updated",
+      "user_password_change": "Password changed",
       "user_delete": "User deleted",
       "department_create": "Department created",
       "department_rename": "Department renamed",
@@ -456,7 +488,13 @@
       "approvalDelegation_deactivate": "Delegation deactivated",
       "integration_ical_rotate": "iCal token rotated",
       "attachment_delete": "Attachment deleted",
-      "export_requests": "Leave export"
+      "export_requests": "Leave export",
+      "authorisation_policy_update": "Authorisation policy updated",
+      "authorisation_request_create": "Authorisation request created",
+      "authorisation_request_approve": "Authorisation request approved",
+      "authorisation_request_reject": "Authorisation request rejected",
+      "authorisation_request_cancel": "Authorisation request cancelled",
+      "authorisation_adjust": "Authorisation balance adjusted"
     },
     "entityTypes": {
       "User": "Person",
@@ -468,7 +506,10 @@
       "Company": "Company",
       "ApprovalDelegation": "Delegation",
       "Integration": "Integration",
-      "Attachment": "Attachment"
+      "Attachment": "Attachment",
+      "AuthorisationPolicy": "Authorisation policy",
+      "AuthorisationRequest": "Authorisation request",
+      "AuthorisationBalance": "Authorisation balance"
     }
   },
   "adminUsers": {
@@ -521,6 +562,55 @@
     "noTypes": "No leave types yet.",
     "noPolicies": "No policies for this leave type."
   },
+  "adminHolidays": {
+    "title": "Holidays",
+    "description": "Company-wide days off. They automatically count as vacation days and block requests and calendars.",
+    "count": "{count, plural, one {# holiday} other {# holidays}}",
+    "allYears": "All years",
+    "date": "Date",
+    "holiday": "Holiday",
+    "type": "Type",
+    "source": "Source",
+    "actions": "Actions",
+    "recurring": "every year",
+    "national": "National",
+    "sourceNager": "Nager.Date",
+    "sourceManual": "Manual",
+    "empty": "No holidays yet. Add one manually or import them from Nager.Date.",
+    "noYearHolidays": "No holidays in {year}."
+  },
+  "nagerImport": {
+    "trigger": "Import from Nager.Date",
+    "title": "Import holidays",
+    "description": "Fetch the official public holidays for a country and a year, then pick which ones to add. Existing holidays are never overwritten.",
+    "country": "Country",
+    "countryPlaceholder": "Choose a country",
+    "year": "Year",
+    "fetch": "Fetch holidays",
+    "fetching": "Fetching…",
+    "previewTitle": "{year} holidays for {country}",
+    "returnedCount": "{count, plural, one {# holiday returned} other {# holidays returned}}",
+    "selectAll": "Select all",
+    "deselectAll": "Deselect all",
+    "date": "Date",
+    "holiday": "Holiday",
+    "type": "Type",
+    "national": "National",
+    "yes": "Yes",
+    "fetched": "Fetched",
+    "selected": "Selected",
+    "alreadyExisting": "Already existing",
+    "new": "New",
+    "importSelected": "Add {count, plural, one {# holiday} other {# holidays}}",
+    "fetchAgain": "Fetch again",
+    "importCompleted": "Import completed",
+    "countryLabel": "Country",
+    "yearLabel": "Year",
+    "created": "Added",
+    "existing": "Already existed",
+    "skipped": "Skipped",
+    "failed": "Failed"
+  },
   "adminBalances": {
     "count": "{count, plural, one {# balance row} other {# balance rows}}{selected, select, true { for the selected person.} other {.}}",
     "title": "Leave balances",
@@ -555,6 +645,14 @@
     "countWeekendsHint": "When enabled, weekends inside a requested range count as leave days; only company holidays stay free. Existing requests keep their stored day counts.",
     "extendWeekendLabel": "Extend Friday-ending requests through the weekend",
     "extendWeekendHint": "When enabled, a request that ends on a Friday also deducts the following Saturday and Sunday, even though only weekdays were selected. This never prepends a weekend before a Monday start.",
+    "countHolidaysLabel": "Count holidays as vacation days",
+    "countHolidaysHint": "Choose whether a holiday falling within a vacation period is deducted from the vacation balance. When on, holiday dates inside a vacation period are counted as vacation days; when off, they are excluded from vacation deduction. Weekends are never affected.",
+    "halfDayEnabledLabel": "Half-day option",
+    "halfDayEnabledHint": "Controls whether half-day leave is available at all. When off, every request is full days only.",
+    "halfDayStartDayLabel": "Half-day start day",
+    "halfDayStartDayHint": "When enabled, the start date of a request can be a morning or afternoon half day.",
+    "halfDayEndDayLabel": "Half-day end day",
+    "halfDayEndDayHint": "When enabled, the end date of a request can be a morning or afternoon half day.",
     "calculatorTitle": "Weekend rule calculator",
     "calculatorDescription": "Preview how many days would be deducted for any range under the current saved settings — before anyone submits a real request.",
     "calculatorStart": "Start date",
@@ -641,7 +739,8 @@
     "requestCancelled": "Request cancelled.",
     "attachmentAdded": "Attachment added.",
     "fileRemoved": "File removed.",
-    "exportSuccess": "Excel export downloaded."
+    "exportSuccess": "Excel export downloaded.",
+    "authorisationRequested": "Authorisation requested."
   },
   "adminDialogs": {
     "createUser": {
@@ -671,6 +770,19 @@
       "trigger": "Edit",
       "saving": "Saving…",
       "saveChanges": "Save changes"
+    },
+    "changePassword": {
+      "trigger": "Change password",
+      "title": "Change password",
+      "description": "Set a new password for {name}. The old password stops working immediately.",
+      "newPassword": "New password",
+      "confirmPassword": "Confirm password",
+      "passwordPlaceholder": "At least 8 characters",
+      "repeatPassword": "Repeat the new password",
+      "passwordMismatch": "Passwords do not match.",
+      "changing": "Changing…",
+      "changePassword": "Change password",
+      "success": "Password changed."
     },
     "department": {
       "createTrigger": "Add department",
@@ -722,6 +834,36 @@
       "requestsNeedAttachment": "Requests need an attachment",
       "savePolicy": "Save policy"
     },
+    "holiday": {
+      "createTrigger": "Add holiday",
+      "createTitle": "Add a holiday",
+      "createDescription": "A company-wide day off. It automatically counts as a vacation day and blocks requests and calendars.",
+      "name": "Name",
+      "date": "Date",
+      "namePlaceholder": "e.g. New Year's Day",
+      "type": {
+        "label": "Type",
+        "Public": "Public holiday",
+        "Bank": "Bank holiday",
+        "School": "School holiday",
+        "Authorities": "Authorities holiday",
+        "Optional": "Optional holiday",
+        "Observance": "Observance"
+      },
+      "typePlaceholder": "No type",
+      "create": "Add holiday",
+      "creating": "Adding…",
+      "editTrigger": "Edit",
+      "editTitle": "Edit holiday",
+      "editDescription": "Changing the name, date or type also updates every report and calendar that uses this holiday.",
+      "save": "Save changes",
+      "saving": "Saving…",
+      "deleteTrigger": "Delete",
+      "deleteTitle": "Delete {name}?",
+      "deleteDescription": "It will be removed from calendars and no longer block vacation requests. This cannot be undone.",
+      "deleteConfirm": "Delete holiday",
+      "deleting": "Deleting…"
+    },
     "balance": {
       "trigger": "Adjust balance",
       "title": "Adjust a balance",
@@ -764,7 +906,18 @@
     "declinedBody": "Your {type} from {start} was declined{reason, select, none {.} other {: {reason}}}",
     "daysAddedTitle": "Leave days added",
     "daysRemovedTitle": "Leave days removed",
-    "balanceBody": "{sign}{delta} {type} day(s){reason, select, none {.} other { — {reason}.}}"
+    "balanceBody": "{sign}{delta} {type} day(s){reason, select, none {.} other { — {reason}.}}",
+    "authorisationRequestFrom": "Authorisation request from {name}",
+    "authorisationApproved": "Authorisation approved",
+    "authorisationDeclined": "Authorisation declined",
+    "authorisationHoursAdded": "Authorisation hours added",
+    "authorisationHoursRemoved": "Authorisation hours removed",
+    "authorisationBody": "{date} · {count, plural, one {# hour} other {# hours}}",
+    "authorisationBodyReason": "{date} · {count, plural, one {# hour} other {# hours}} — {reason}",
+    "authorisationBalanceAdded": "+{count} authorisation hours added.",
+    "authorisationBalanceRemoved": "{count} authorisation hours removed.",
+    "authorisationBalanceAddedReason": "+{count} authorisation hours added — {reason}.",
+    "authorisationBalanceRemovedReason": "{count} authorisation hours removed — {reason}."
   },
   "errors": {
     "pickValidDates": "Pick valid start and end dates.",
@@ -775,6 +928,12 @@
     "rangeStartAfterEnd": "Range start {start} is after end {end}",
     "noWorkingDays": "Span {start}..{end} contains no working days",
     "cannotSplitHalfDay": "A single working day cannot be split into two half days",
+    "endBeforeStart": "The end day part cannot be earlier than the start day part.",
+    "halfDayDisabled": "Half-day leave is not enabled for your company.",
+    "halfDayStartDisabled": "Half-day starts are not allowed by company policy.",
+    "halfDayEndDisabled": "Half-day ends are not allowed by company policy.",
+    "passwordMismatch": "Passwords do not match.",
+    "onlySuperAdminResetPrivileged": "Only a SUPER_ADMIN can reset privileged users' passwords.",
     "overlapsOwnRequest": "This overlaps a request you already submitted.",
     "insufficientBalance": "Insufficient balance: {available, plural, one {# day} other {# days}} available, {requested} requested.",
     "carriedOverExpiry": "Carried-over days must be used by {expiry} — end the request on or before that date.",
@@ -839,6 +998,112 @@
     "storageUnavailable": "File storage is unavailable right now.",
     "exportForbidden": "You do not have permission to export leave data.",
     "invalidExportRange": "Pick a valid date range to export.",
-    "invalidExportRequest": "The export request was not understood."
+    "invalidExportRequest": "The export request was not understood.",
+    "authorisationsDisabled": "Authorisations are not enabled for your company.",
+    "authorisationInvalidDate": "Pick a valid date.",
+    "authorisationCurrentMonthOnly": "Authorisations can only be requested for the current monthly period.",
+    "authorisationHoursNotPositive": "Hours must be a positive number.",
+    "authorisationNoBalance": "No authorisation balance is available yet.",
+    "authorisationPolicyAllowance": "Monthly allowance must be a positive number.",
+    "authorisationPolicyMinHours": "Minimum request must be a positive number.",
+    "authorisationPolicyMaxHours": "Maximum request cannot be below the minimum.",
+    "authorisationPolicyIncrement": "Request increment must be a positive number.",
+    "authorisationPolicyCarryOver": "Max carry-over cannot be negative.",
+    "authorisationBelowMinimum": "The minimum request is {min} hours.",
+    "authorisationAboveMaximum": "The maximum request is {max} hours.",
+    "authorisationNotIncrement": "Requests must be a multiple of {increment} hours.",
+    "authorisationInsufficientBalance": "Insufficient hours: {available} available, {requested} requested.",
+    "authorisationAdjustmentBelowZero": "Adjustment would take the balance below zero (currently {available} h).",
+    "holidayNameRequired": "Holiday name is required.",
+    "holidayInvalidDate": "Pick a valid holiday date.",
+    "holidayDateExists": "A holiday already exists on this date.",
+    "holidayNotFound": "Holiday not found.",
+    "nagerInvalidCountry": "That country code is not supported.",
+    "nagerInvalidYear": "Pick a year between 1900 and 2100.",
+    "nagerInvalidData": "The holiday data returned by Nager.Date was not understood.",
+    "nagerUnreachable": "Nager.Date could not be reached. Try again later.",
+    "nagerNoHolidays": "No holidays were returned for this country and year.",
+    "nagerNoSelection": "Select at least one holiday to import."
+  },
+  "authorisations": {
+    "title": "Authorisations",
+    "subtitle": "Monthly period {period}",
+    "newRequest": "New request",
+    "disabledTitle": "Authorisations are disabled",
+    "disabledDescription": "Ask your administrator to enable the authorisations module.",
+    "balanceTitle": "This month's balance",
+    "balanceSubtitle": "Hours available for this monthly period.",
+    "available": "Available",
+    "granted": "Granted",
+    "carriedOver": "Carried over",
+    "used": "Used",
+    "pending": "Pending",
+    "hours": "{count, plural, =0 {# hours} one {# hour} other {# hours}}",
+    "items": "{count, plural, =0 {# items} one {# item} other {# items}}",
+    "noBalanceYet": "Your balance will appear as soon as your monthly period starts.",
+    "upcomingTitle": "Upcoming",
+    "nothingUpcoming": "Nothing upcoming.",
+    "recentTitle": "Recent requests",
+    "noRequestsYet": "No requests yet.",
+    "historyTitle": "History",
+    "historySubtitle": "Your balance per monthly period.",
+    "noHistoryYet": "No history yet.",
+    "currentPeriod": "Current period",
+    "adjustment": "Adjustment",
+    "newTitle": "New authorisation request",
+    "newSubtitle": "Period {period}",
+    "date": "Date",
+    "hoursField": "Hours",
+    "hoursHint": "Between {min} and {max} hours, in steps of {increment}.",
+    "belowMinimum": "The minimum request is {min} hours.",
+    "aboveMaximum": "The maximum request is {max} hours.",
+    "notIncrement": "Requests must be a multiple of {increment} hours.",
+    "insufficient": "Only {available} hours available, {requested} requested.",
+    "reason": "Reason",
+    "reasonHint": "Optional — visible to your approver.",
+    "submitting": "Submitting…",
+    "submit": "Submit request",
+    "startTime": "Start time",
+    "endTime": "End time",
+    "duration": "Duration",
+    "endNotAfterStart": "End time must be after start time.",
+    "minimumAdjusted": "Minimum duration: {min} hours. End time adjusted to {end}.",
+    "notEnoughTime": "Not enough time left in the day to reach the {min} hour minimum.",
+    "rangeHint": "From {start} to {end} ({min}–{max} hours).",
+    "pendingApprovalsTitle": "Authorisation approvals",
+    "pendingApprovalsDescription": "Time-based authorisations waiting on your decision."
+  },
+  "authorisationsPolicy": {
+    "title": "Authorisations",
+    "description": "Hour-based, monthly periods. Enabling the module never deletes data.",
+    "enabledLabel": "Enable authorisations",
+    "enabledHint": "Employees can request hour-based time off each month.",
+    "monthlyAllowanceLabel": "Monthly allowance (h)",
+    "monthlyAllowanceHint": "Hours granted each month.",
+    "maxCarryOverLabel": "Maximum carry-over",
+    "maxCarryOverHint": "Maximum number of unused authorisation hours that can be carried into the next period.",
+    "minHoursLabel": "Minimum per request (h)",
+    "minHoursHint": "Smallest request allowed.",
+    "maxHoursLabel": "Maximum per request (h)",
+    "maxHoursHint": "Largest request allowed.",
+    "incrementLabel": "Increment (h)",
+    "incrementHint": "Requests must be a multiple of this.",
+    "prorateJoiningLabel": "Prorate joining month",
+    "prorateJoiningHint": "First-month allowance scales with the remaining days when the hire day counts.",
+    "carryOverEnabledLabel": "Carry over unused hours",
+    "carryOverEnabledHint": "Unused hours roll over to the next month, capped at the max.",
+    "requiresApprovalLabel": "Require approval",
+    "requiresApprovalHint": "Requests must be approved before counting as used. Off means requests are approved instantly."
+  },
+  "authorisationsAdjust": {
+    "trigger": "Adjust balance",
+    "title": "Adjust authorisation balance",
+    "description": "Add or remove hours for the current monthly period.",
+    "user": "Employee",
+    "hours": "Hours",
+    "hoursHint": "Positive adds, negative removes.",
+    "reason": "Reason",
+    "applying": "Applying…",
+    "apply": "Apply"
   }
 }

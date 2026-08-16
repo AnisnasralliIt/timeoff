@@ -38,7 +38,7 @@ ensureEnv();
 import assert from "node:assert/strict";
 import bcrypt from "bcryptjs";
 import { prisma } from "@timeoff/db";
-import { accruedVacationAsOf, leaveYearRange } from "@timeoff/domain";
+import { accruedVacationAsOf, leaveYearRange, computeLeaveDays } from "@timeoff/domain";
 import type { SessionUser } from "../lib/session";
 import type { CalendarLeave, CalendarRosterMember, RequestStatus } from "../lib/calendar-shared";
 import {
@@ -60,6 +60,7 @@ import {
   balanceHistoryFor,
   audit,
   LeaveError,
+  companyHolidays,
 } from "../lib/services/leave";
 import { listAuditLog, canViewAuditLog, AuditAccessError } from "../lib/services/audit";
 import {
@@ -74,6 +75,13 @@ import {
   updateCompanySettingsForAdmin,
 } from "../lib/services/admin";
 import { canViewRequest } from "../lib/services/attachments";
+import {
+  listHolidaysForAdmin,
+  createHolidayForAdmin,
+  updateHolidayForAdmin,
+  deleteHolidayForAdmin,
+  importNagerHolidaysForAdmin,
+} from "../lib/services/holidays";
 import {
   listCalendarRequests,
   listCalendarRoster,
@@ -720,24 +728,54 @@ async function main() {
     const companyId = superAdmin.companyId!;
     const original = await prisma.company.findUniqueOrThrow({
       where: { id: companyId },
-      select: { countWeekendsWithinSpan: true, extendWeekendAfterFriday: true },
+      select: {
+        countWeekendsWithinSpan: true,
+        extendWeekendAfterFriday: true,
+        countHolidaysAsVacationDays: true,
+      },
     });
     try {
-      await updateCompanySettingsForAdmin(superAdmin, { countWeekendsWithinSpan: true, extendWeekendAfterFriday: false });
+      await updateCompanySettingsForAdmin(superAdmin, {
+        countWeekendsWithinSpan: true,
+        extendWeekendAfterFriday: false,
+        countHolidaysAsVacationDays: true,
+        halfDayEnabled: true,
+        halfDayStartDay: true,
+        halfDayEndDay: false,
+      });
       let row = await prisma.company.findUniqueOrThrow({ where: { id: companyId } });
       assert.equal(row.countWeekendsWithinSpan, true);
       assert.equal(row.extendWeekendAfterFriday, false);
+      assert.equal(row.countHolidaysAsVacationDays, true);
+      assert.equal(row.halfDayEnabled, true);
+      assert.equal(row.halfDayStartDay, true);
+      assert.equal(row.halfDayEndDay, false);
 
-      await updateCompanySettingsForAdmin(superAdmin, { countWeekendsWithinSpan: false, extendWeekendAfterFriday: true });
+      await updateCompanySettingsForAdmin(superAdmin, {
+        countWeekendsWithinSpan: false,
+        extendWeekendAfterFriday: true,
+        countHolidaysAsVacationDays: false,
+        halfDayEnabled: false,
+        halfDayStartDay: true,
+        halfDayEndDay: true,
+      });
       row = await prisma.company.findUniqueOrThrow({ where: { id: companyId } });
       assert.equal(row.countWeekendsWithinSpan, false);
       assert.equal(row.extendWeekendAfterFriday, true);
+      assert.equal(row.countHolidaysAsVacationDays, false);
+      assert.equal(row.halfDayEnabled, false);
+      assert.equal(row.halfDayStartDay, true);
+      assert.equal(row.halfDayEndDay, true);
     } finally {
       await prisma.company.update({
         where: { id: companyId },
         data: {
           countWeekendsWithinSpan: original.countWeekendsWithinSpan,
           extendWeekendAfterFriday: original.extendWeekendAfterFriday,
+          countHolidaysAsVacationDays: original.countHolidaysAsVacationDays,
+          halfDayEnabled: false,
+          halfDayStartDay: false,
+          halfDayEndDay: false,
         },
       });
     }
@@ -1739,6 +1777,256 @@ async function main() {
     for (const row of userIds) {
       assert(companyIds.has(row.companyId), `user references a company that does not exist: ${row.companyId}`);
     }
+  });
+
+  /* ---- Holiday management + Nager import ---- */
+  console.log("\n— Holiday management & Nager import —");
+
+  // A guaranteed weekday for the counting checks below (computed in UTC so no
+  // local-timezone shift can turn it into a Sunday).
+  const smokeBase = new Date(Date.UTC(2030, 5, 24));
+  while (smokeBase.getUTCDay() === 0 || smokeBase.getUTCDay() === 6) smokeBase.setUTCDate(smokeBase.getUTCDate() + 1);
+  const smokeDate = smokeBase.toISOString().slice(0, 10);
+  const smokeName = `Smoke Holiday ${Date.now()}`;
+
+  await check("holiday CRUD requires HR/ADMIN", async () => {
+    await assert.rejects(() => listHolidaysForAdmin(employee), (e: unknown) => e instanceof LeaveError);
+    await assert.rejects(
+      () => createHolidayForAdmin(employee, { name: smokeName, date: smokeDate }),
+      (e: unknown) => e instanceof LeaveError,
+    );
+    await assert.rejects(
+      () => updateHolidayForAdmin(employee, "nope", { name: smokeName, date: smokeDate }),
+      (e: unknown) => e instanceof LeaveError,
+    );
+    await assert.rejects(
+      () => deleteHolidayForAdmin(employee, "nope"),
+      (e: unknown) => e instanceof LeaveError,
+    );
+  });
+
+  let createdId = "";
+  await check("HR creates a manual holiday (source MANUAL)", async () => {
+    const holiday = await createHolidayForAdmin(hr, {
+      name: smokeName,
+      date: smokeDate,
+      holidayTypes: ["Public"],
+    });
+    createdId = holiday.id;
+    assert.equal(holiday.source, "MANUAL");
+    assert.equal(holiday.global, false);
+    assert.deepEqual(holiday.holidayTypes, ["Public"]);
+  });
+
+  await check("duplicate date in the same company is rejected (unique companyId+date)", async () => {
+    await assert.rejects(
+      () => createHolidayForAdmin(hr, { name: smokeName, date: smokeDate }),
+      (e: unknown) => e instanceof LeaveError && e.code === "holidayDateExists",
+    );
+  });
+
+  await check("holiday appears in calendar/vacation integration (companyHolidays)", async () => {
+    const holidays = await companyHolidays(prisma, hr.companyId!, "2030-01-01", "2030-12-31");
+    assert(holidays.has(smokeDate), "created holiday must appear in companyHolidays");
+  });
+
+  await check("a weekday holiday counts as a vacation day only when the setting is on", async () => {
+    const dayAfter = new Date(new Date(`${smokeDate}T00:00:00Z`).getTime() + 86_400_000).toISOString().slice(0, 10);
+    const span = { startDate: smokeDate, endDate: dayAfter, startDayPart: "FULL", endDayPart: "FULL" } as const;
+    const opts = { holidays: new Set([smokeDate]), countWeekendsWithinSpan: false, extendWeekendAfterFriday: false };
+    const on = computeLeaveDays(span, { ...opts, countHolidaysAsVacationDays: true });
+    const off = computeLeaveDays(span, { ...opts, countHolidaysAsVacationDays: false });
+    assert.equal(on.totalDays, 2, "holiday must count as a vacation day when enabled");
+    assert.equal(off.totalDays, 1, "holiday must be free when disabled");
+  });
+
+  await check("holidays are company-scoped and unreachable across companies", async () => {
+    const other = await prisma.company.create({ data: { name: `Smoke Corp ${Date.now()}`, countryCode: "FR" } });
+    const otherHoliday = await prisma.holiday.create({
+      data: { companyId: other.id, countryCode: "FR", name: "Other Co holiday", date: "2030-07-14" },
+    });
+    try {
+      const list = await listHolidaysForAdmin(hr);
+      assert(!list.some((h) => h.companyId === other.id), "HR must not see another company's holidays");
+      await assert.rejects(
+        () => updateHolidayForAdmin(hr, otherHoliday.id, { name: "x", date: "2030-07-14" }),
+        (e: unknown) => e instanceof LeaveError && e.code === "holidayNotFound",
+      );
+      await assert.rejects(
+        () => deleteHolidayForAdmin(hr, otherHoliday.id),
+        (e: unknown) => e instanceof LeaveError && e.code === "holidayNotFound",
+      );
+    } finally {
+      await prisma.holiday.deleteMany({ where: { companyId: other.id } });
+      await prisma.company.delete({ where: { id: other.id } });
+    }
+  });
+
+  await check("HR edits a holiday; clash check ignores the row itself", async () => {
+    const updated = await updateHolidayForAdmin(hr, createdId, { name: `${smokeName} renamed`, date: "2030-12-25" });
+    assert.equal(updated.name, `${smokeName} renamed`);
+    assert.equal(updated.date, "2030-12-25");
+    const back = await updateHolidayForAdmin(hr, createdId, { name: smokeName, date: smokeDate });
+    assert.equal(back.date, smokeDate);
+  });
+
+  await check("deleting a holiday removes it from calendars", async () => {
+    await deleteHolidayForAdmin(hr, createdId);
+    const holidays = await companyHolidays(prisma, hr.companyId!, "2030-01-01", "2030-12-31");
+    assert(!holidays.has(smokeDate), "deleted holiday must not appear anymore");
+  });
+
+  const realFetch = globalThis.fetch;
+  const stubNager = (payload: unknown, status = 200) => {
+    globalThis.fetch = (async (input: string | URL | Request) => {
+      const url = String(input);
+      if (url.startsWith("https://date.nager.at/api/v4/Holidays/")) {
+        return new Response(JSON.stringify(payload), {
+          status,
+          headers: { "content-type": "application/json" },
+        });
+      }
+      return new Response(JSON.stringify({ error: "unexpected" }), { status: 500 });
+    }) as typeof fetch;
+  };
+
+  try {
+    // 2031 avoids every date the seed already inserts for DE (2025/2026).
+    const importPayload = [
+      { date: "2031-01-01", name: "New Year's Day", countryCode: "DE", fixed: true, global: true, types: ["Public"] },
+      { date: "2031-04-18", name: "Good Friday", countryCode: "DE", fixed: false, global: true, types: ["Public"] },
+      { date: "2031-05-01", name: "Labour Day", countryCode: "DE", fixed: false, global: true, types: ["Public"] },
+      { date: "2031-11-19", name: "Repentance Day", countryCode: "DE", fixed: false, global: false, types: ["Public"] },
+    ];
+    const importDates = ["2031-01-01", "2031-04-18", "2031-05-01", "2031-11-19"];
+    stubNager(importPayload);
+
+    await check("Nager import creates the missing holidays and audits one summary event", async () => {
+      const res = await importNagerHolidaysForAdmin(hr, {
+        countryCode: "DE",
+        year: 2031,
+        selectedDates: importDates,
+      });
+      assert.equal(res.fetched, 4);
+      assert.equal(res.selected, 4);
+      assert.equal(res.created, 4);
+      assert.equal(res.existing, 0);
+      assert.equal(res.skipped, 0);
+      const rows = await prisma.holiday.findMany({ where: { companyId: hr.companyId!, date: { in: importDates } } });
+      assert.equal(rows.length, 4, "all four selected holidays must be created");
+      assert(rows.every((r) => r.source === "NAGER_DATE"), "imported rows must be marked NAGER_DATE");
+      const auditRow = await prisma.auditLog.findFirst({
+        where: { companyId: hr.companyId!, action: "holiday.import", entityNameSnapshot: "DE 2031" },
+        orderBy: { createdAt: "desc" },
+      });
+      assert(auditRow, "import must write a summary audit event");
+    });
+
+    await check("re-import is idempotent: nothing new, nothing overwritten", async () => {
+      const res = await importNagerHolidaysForAdmin(hr, {
+        countryCode: "DE",
+        year: 2031,
+        selectedDates: importDates,
+      });
+      assert.equal(res.created, 0);
+      assert.equal(res.existing, 4);
+      assert.equal(res.skipped, 0);
+    });
+
+    await check("re-import never overwrites a manual edit", async () => {
+      const row = await prisma.holiday.findFirst({ where: { companyId: hr.companyId!, date: "2031-01-01" } });
+      assert(row, "imported row must exist");
+      await prisma.holiday.update({ where: { id: row.id }, data: { name: "Manual New Year" } });
+      const res = await importNagerHolidaysForAdmin(hr, { countryCode: "DE", year: 2031, selectedDates: ["2031-01-01"] });
+      assert.equal(res.created, 0);
+      assert.equal(res.existing, 1);
+      const after = await prisma.holiday.findFirst({ where: { id: row.id } });
+      assert.equal(after?.name, "Manual New Year", "manual edit must be preserved");
+    });
+
+    await check("stale selection dates are reported as skipped", async () => {
+      const res = await importNagerHolidaysForAdmin(hr, {
+        countryCode: "DE",
+        year: 2031,
+        selectedDates: ["2031-05-01", "1999-01-01"],
+      });
+      assert.equal(res.existing, 1);
+      assert.equal(res.skipped, 1);
+    });
+
+    await check("import requires HR and a non-empty selection", async () => {
+      await assert.rejects(
+        () => importNagerHolidaysForAdmin(employee, { countryCode: "DE", year: 2031, selectedDates: ["2031-01-01"] }),
+        (e: unknown) => e instanceof LeaveError,
+      );
+      await assert.rejects(
+        () => importNagerHolidaysForAdmin(hr, { countryCode: "DE", year: 2031, selectedDates: [] }),
+        (e: unknown) => e instanceof LeaveError && e.code === "nagerNoSelection",
+      );
+    });
+
+    await check("invalid country/year are rejected before any network call", async () => {
+      let called = false;
+      globalThis.fetch = (async () => {
+        called = true;
+        return new Response("x", { status: 500 });
+      }) as typeof fetch;
+      await assert.rejects(
+        () => importNagerHolidaysForAdmin(hr, { countryCode: "DE1", year: 2031, selectedDates: ["2031-01-01"] }),
+        (e: unknown) => (e as { code?: string }).code === "nagerInvalidCountry",
+      );
+      await assert.rejects(
+        () => importNagerHolidaysForAdmin(hr, { countryCode: "DE", year: 1899, selectedDates: ["2031-01-01"] }),
+        (e: unknown) => (e as { code?: string }).code === "nagerInvalidYear",
+      );
+      assert.equal(called, false, "network must not be hit for invalid input");
+    });
+
+    await check("Nager empty responses map to nagerNoHolidays", async () => {
+      stubNager([], 200);
+      await assert.rejects(
+        () => importNagerHolidaysForAdmin(hr, { countryCode: "DE", year: 2027, selectedDates: ["2027-01-01"] }),
+        (e: unknown) => e instanceof LeaveError && e.code === "nagerNoHolidays",
+      );
+    });
+
+    await check("country code is normalized (de → DE)", async () => {
+      stubNager(importPayload);
+      const res = await importNagerHolidaysForAdmin(hr, { countryCode: "de", year: 2031, selectedDates: ["2031-05-01"] });
+      assert.equal(res.countryCode, "DE");
+      assert.equal(res.existing, 1);
+    });
+  } finally {
+    globalThis.fetch = realFetch;
+  }
+
+  await check("manual holiday ops write create/update/delete audit events", async () => {
+    const created = await createHolidayForAdmin(hr, { name: `${smokeName} audit`, date: "2030-08-15" });
+    const updated = await updateHolidayForAdmin(hr, created.id, { name: `${smokeName} audit 2`, date: "2030-08-15" });
+    await deleteHolidayForAdmin(hr, created.id);
+    const actions = await prisma.auditLog.findMany({
+      where: { companyId: hr.companyId!, entityType: "Holiday", entityId: created.id },
+      orderBy: { createdAt: "asc" },
+    });
+    assert.equal(updated.name, `${smokeName} audit 2`);
+    assert.deepEqual(
+      actions.map((a) => a.action),
+      ["holiday.create", "holiday.update", "holiday.delete"],
+    );
+  });
+
+  // Cleanup: remove every row this section created (holiday rows + audit trail).
+  await prisma.holiday.deleteMany({
+    where: {
+      companyId: hr.companyId!,
+      date: { in: ["2031-01-01", "2031-04-18", "2031-05-01", "2031-11-19", smokeDate, "2030-12-25", "2030-08-15"] },
+    },
+  });
+  await prisma.auditLog.deleteMany({
+    where: {
+      companyId: hr.companyId!,
+      action: { in: ["holiday.create", "holiday.update", "holiday.delete", "holiday.import"] },
+    },
   });
 
   console.log(`\n${checks} checks, ${failures} failures.`);

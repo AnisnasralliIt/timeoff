@@ -801,6 +801,27 @@ async function resolveAuditTarget(
       return db.leavePolicy
         .findUnique({ where: { id: entityId }, select: { name: true } })
         .then((row) => ({ entityName: row?.name ?? null, employeeId: null }));
+    case "AuthorisationRequest":
+    case "authorisationRequest":
+      return db.authorisationRequest
+        .findUnique({
+          where: { id: entityId },
+          select: { userId: true, user: { select: { name: true } } },
+        })
+        .then((row) => ({ entityName: row?.user?.name ?? null, employeeId: row?.userId ?? null }));
+    case "AuthorisationBalance":
+    case "authorisationBalance":
+      return db.authorisationBalance
+        .findUnique({
+          where: { id: entityId },
+          select: { userId: true, user: { select: { name: true } } },
+        })
+        .then((row) => ({ entityName: row?.user?.name ?? null, employeeId: row?.userId ?? null }));
+    case "AuthorisationPolicy":
+    case "authorisationPolicy":
+      return db.authorisationPolicy
+        .findUnique({ where: { id: entityId }, select: { company: { select: { name: true } } } })
+        .then((row) => ({ entityName: row?.company?.name ?? null, employeeId: null }));
     case "Company":
     case "company":
       return db.company
@@ -875,6 +896,12 @@ export async function createLeaveRequest(user: SessionUser, input: CreateLeaveIn
     throw new LeaveError("Pick valid start and end dates.");
   }
 
+  // Day parts are tamperable via FormData — validate before anything else.
+  const validParts = ["FULL", "FIRST_HALF", "SECOND_HALF"];
+  if (!validParts.includes(startDayPart) || !validParts.includes(endDayPart)) {
+    throw new LeaveError("Pick valid start and end dates.");
+  }
+
   const dbUser = await prisma.user.findUnique({ where: { id: user.id } });
   if (!dbUser || dbUser.status !== "ACTIVE") {
     throw new LeaveError("Your account is not active.");
@@ -895,6 +922,18 @@ export async function createLeaveRequest(user: SessionUser, input: CreateLeaveIn
 
   const company = await prisma.company.findUniqueOrThrow({ where: { id: user.companyId! } });
 
+  // Half-day policy is enforced server-side (source of truth), so a tampered
+  // form can never bypass the company's half-day settings.
+  if (!company.halfDayEnabled && (startDayPart !== "FULL" || endDayPart !== "FULL")) {
+    throw new LeaveError("Half-day leave is not enabled for your company.");
+  }
+  if (startDayPart !== "FULL" && !company.halfDayStartDay) {
+    throw new LeaveError("Half-day starts are not allowed by company policy.");
+  }
+  if (endDayPart !== "FULL" && !company.halfDayEndDay) {
+    throw new LeaveError("Half-day ends are not allowed by company policy.");
+  }
+
   let computed;
   try {
     const holidays = await holidaysForRange(
@@ -910,6 +949,7 @@ export async function createLeaveRequest(user: SessionUser, input: CreateLeaveIn
         holidays,
         countWeekendsWithinSpan: company.countWeekendsWithinSpan,
         extendWeekendAfterFriday: company.extendWeekendAfterFriday,
+        countHolidaysAsVacationDays: company.countHolidaysAsVacationDays,
       },
     );
   } catch (error) {
@@ -935,7 +975,11 @@ export async function createLeaveRequest(user: SessionUser, input: CreateLeaveIn
     const overlap = spansOverlap(
       { startDate, endDate, startDayPart, endDayPart },
       { startDate: other.startDate, endDate: other.endDate, startDayPart: other.startDayPart, endDayPart: other.endDayPart },
-      { holidays, countWeekendsWithinSpan: company.countWeekendsWithinSpan },
+      {
+        holidays,
+        countWeekendsWithinSpan: company.countWeekendsWithinSpan,
+        countHolidaysAsVacationDays: company.countHolidaysAsVacationDays,
+      },
     );
     if (overlap.overlappingDays > 0) {
       throw new LeaveError("This overlaps a request you already submitted.");
