@@ -1,7 +1,8 @@
 "use client";
 
-import { useTranslations } from "next-intl";
+import { useLocale, useTranslations } from "next-intl";
 import type { CalendarAuthorisation, CalendarLeave } from "@/lib/calendar-shared";
+import { resolveLeaveTypeName } from "@/lib/leave-type-name";
 
 interface CalendarLegendProps {
   requests: CalendarLeave[];
@@ -13,13 +14,18 @@ const PENDING_STRIPES = "repeating-linear-gradient(45deg, transparent 0 4px, rgb
 /** Small legend matching the calendar bars: leave-type colors, status, today. */
 export function CalendarLegend({ requests, authorisations = [] }: CalendarLegendProps) {
   const t = useTranslations("calendar");
+  const locale = useLocale();
 
   const leaveTypes = [];
   const seen = new Set<string>();
   for (const r of requests) {
     if (seen.has(r.leaveTypeId)) continue;
     seen.add(r.leaveTypeId);
-    leaveTypes.push({ id: r.leaveTypeId, name: r.leaveTypeName, color: r.leaveTypeColor });
+    leaveTypes.push({
+      id: r.leaveTypeId,
+      name: resolveLeaveTypeName({ name: r.leaveTypeName, nameEn: r.leaveTypeNameEn, nameFr: r.leaveTypeNameFr }, locale),
+      color: r.leaveTypeColor,
+    });
   }
 
   return (

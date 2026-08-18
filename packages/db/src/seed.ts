@@ -420,8 +420,8 @@ async function main(): Promise<void> {
     const leaveTypes = new Map<string, string>();
     for (const type of [
       { key: "VACATION", name: "Vacation", color: "#2e9486", sortOrder: 0 },
-      { key: "SICK", name: "Sick Leave", color: "#e07b5a", sortOrder: 1, requiresApproval: false },
-      { key: "PERSONAL", name: "Personal", color: "#d9a441", sortOrder: 2 },
+      { key: "SICK", name: "Sick Leave", color: "#e07b5a", sortOrder: 1, requiresApproval: false, isArchived: true },
+      { key: "PERSONAL", name: "Personal", color: "#d9a441", sortOrder: 2, isArchived: true },
     ]) {
       const created = await tx.leaveType.create({
         data: {
@@ -431,6 +431,7 @@ async function main(): Promise<void> {
           sortOrder: type.sortOrder,
           requiresApproval: type.requiresApproval ?? true,
           isSystem: true,
+          isArchived: type.isArchived ?? false,
         },
       });
       leaveTypes.set(type.key, created.id);

@@ -53,7 +53,7 @@ interface ScopedLeaveRow {
   updatedAt: Date;
   approvedAt: Date | null;
   rejectionReason: string | null;
-  leaveType: { id: string; name: string; color: string };
+  leaveType: { id: string; name: string; nameEn: string | null; nameFr: string | null; color: string };
   user: { id: string; name: string; department: { id: string; name: string } };
   approvedBy: { name: string } | null;
   approvalSteps: { action: LeaveRequestStatus; createdAt: Date; approver: { name: string } | null }[];
@@ -110,6 +110,8 @@ function toCalendarLeave(row: ScopedLeaveRow): CalendarLeave {
     departmentName: row.user.department.name,
     leaveTypeId: row.leaveType.id,
     leaveTypeName: row.leaveType.name,
+    leaveTypeNameEn: row.leaveType.nameEn,
+    leaveTypeNameFr: row.leaveType.nameFr,
     leaveTypeColor: row.leaveType.color,
     startDate: row.startDate,
     endDate: row.endDate,

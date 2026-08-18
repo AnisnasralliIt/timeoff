@@ -1268,15 +1268,17 @@ async function main() {
       // no activity — and the numbers come straight from storage.
       const fresh = await makeUser("hist.fresh@acme.dev", "2026-08-01");
       made.push(fresh);
-      const freshHistory = (await balanceHistoryFor(admin, fresh.id)).filter((y) => y.leaveType === vacation.name);
-      assert.equal(freshHistory.length, 1, "fresh employee has exactly one vacation balance year");
+      const freshHistory = (await balanceHistoryFor(admin, fresh.id));
+      assert.equal(freshHistory.length, 1, "fresh employee has exactly one balance year");
+      const freshVac = freshHistory[0]!.leaveTypes.find((lt) => lt.leaveType === vacation.name);
+      assert(freshVac, "fresh employee has a vacation leave type entry");
       const freshStored = await prisma.leaveBalance.findFirst({
         where: { userId: fresh.id, leaveTypeId: vacation.id },
       });
       assert(freshStored, "fresh employee balance row missing");
       assert.equal(freshHistory[0]!.isCurrent, true, "fresh employee row is the current leave year");
-      assert.equal(freshHistory[0]!.carriedOver, 0, "fresh employee carries nothing over");
-      assert.equal(freshHistory[0]!.accrued, freshStored.accrued, "history accrued must match the stored row");
+      assert.equal(freshVac.carriedOver, 0, "fresh employee carries nothing over");
+      assert.equal(freshVac.accrued, freshStored.accrued, "history accrued must match the stored row");
       assert.equal(freshHistory[0]!.activity.length, 0, "fresh employee has no activity");
 
       // Employee with three leave years, one request per year, immutability to
@@ -1362,19 +1364,21 @@ async function main() {
         ],
       });
 
-      const history = (await balanceHistoryFor(admin, multi.id)).filter((y) => y.leaveType === vacation.name);
-      assert.equal(history.length, 3, "history must include all three vacation leave years");
+      const history = (await balanceHistoryFor(admin, multi.id));
+      assert.equal(history.length, 3, "history must include all three leave years");
       assert.equal(history[0]!.periodStart, "2026-01-01", "newest leave year first");
       assert.equal(history[1]!.periodStart, "2025-01-01", "middle leave year second");
       assert.equal(history[2]!.periodStart, "2024-01-01", "oldest leave year last");
       assert.equal(history[0]!.isCurrent, true, "2026 is the current leave year");
       assert.equal(history[1]!.isCurrent, false, "2025 is not the current leave year");
-      assert.equal(history[0]!.accrued, 12, "stored 2026 accrued surfaces unchanged");
-      assert.equal(history[0]!.carriedOver, 5, "stored 2026 carriedOver surfaces unchanged");
-      assert.equal(history[0]!.used, 3, "stored 2026 used surfaces unchanged");
-      assert.equal(history[0]!.pending, 2, "stored 2026 pending surfaces unchanged");
+      const v2026 = history[0]!.leaveTypes.find((lt) => lt.leaveType === vacation.name);
+      assert(v2026, "2026 has a vacation entry");
+      assert.equal(v2026.accrued, 12, "stored 2026 accrued surfaces unchanged");
+      assert.equal(v2026.carriedOver, 5, "stored 2026 carriedOver surfaces unchanged");
+      assert.equal(v2026.used, 3, "stored 2026 used surfaces unchanged");
+      assert.equal(v2026.pending, 2, "stored 2026 pending surfaces unchanged");
       assert.equal(
-        history[0]!.available,
+        v2026.available,
         12 + 5 - 3 - 2,
         "available comes from the stored formula, never recomputed",
       );
@@ -1391,7 +1395,7 @@ async function main() {
         where: { id: policy.id },
         data: { annualAllotment: allotment + 6, carryOverDays: Math.max(1, cap - 5) },
       });
-      const after = (await balanceHistoryFor(admin, multi.id)).filter((y) => y.leaveType === vacation.name);
+      const after = (await balanceHistoryFor(admin, multi.id));
       assert.equal(JSON.stringify(after), before, "policy change must not rewrite historical rows");
       await prisma.leavePolicy.update({ where: { id: policy.id }, data: { annualAllotment: allotment, carryOverDays: cap } });
 
@@ -1405,7 +1409,7 @@ async function main() {
       const own = await balanceHistoryFor(employee, employee.id);
       assert(own.length > 0, "EMPLOYEE can read their own history");
       assert.equal(
-        (await balanceHistoryFor(hr, multi.id)).filter((y) => y.leaveType === vacation.name).length,
+        (await balanceHistoryFor(hr, multi.id)).length,
         3,
         "HR can read any employee in-company",
       );

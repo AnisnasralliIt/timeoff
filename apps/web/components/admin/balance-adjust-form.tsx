@@ -2,14 +2,15 @@
 
 import { useActionState, useState } from "react";
 import { useFormStatus } from "react-dom";
-import { useTranslations } from "next-intl";
+import { useTranslations, useLocale } from "next-intl";
 import { Wallet } from "lucide-react";
 import { Button, Field, Input, Select, SelectContent, SelectItem, SelectTrigger, SelectValue, Dialog, DialogTrigger, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter, DialogClose } from "@timeoff/ui";
 import { adjustBalanceAction } from "@/lib/actions/admin";
 import { useServerError } from "@/lib/client-error";
+import { resolveLeaveTypeName } from "@/lib/leave-type-name";
 
 type User = { id: string; name: string };
-type LeaveType = { id: string; name: string };
+type LeaveType = { id: string; name: string; nameEn: string | null; nameFr: string | null };
 type BalanceRow = { id: string; userName: string; userEmail: string; leaveType: string; periodStart: string; available: number };
 
 function SubmitButton() {
@@ -33,6 +34,7 @@ export function BalanceAdjustDialog({
 }) {
   const t = useTranslations("adminDialogs.balance");
   const tCommon = useTranslations("common");
+  const locale = useLocale();
   const translateError = useServerError();
   const [state, formAction] = useActionState(adjustBalanceAction, {});
   const [userId, setUserId] = useState(users[0]?.id ?? "");
@@ -78,7 +80,7 @@ export function BalanceAdjustDialog({
               <SelectContent>
                 {leaveTypes.map((lt: (typeof leaveTypes)[number]) => (
                   <SelectItem key={lt.id} value={lt.id}>
-                    {lt.name}
+                    {resolveLeaveTypeName(lt, locale)}
                   </SelectItem>
                 ))}
               </SelectContent>

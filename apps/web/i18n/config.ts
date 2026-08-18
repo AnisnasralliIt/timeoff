@@ -1,6 +1,6 @@
 export const LOCALE_COOKIE = "timeoff-locale";
 
-export const defaultLocale = "en";
+export const defaultLocale = "fr";
 
 export const locales = ["en", "fr"] as const;
 

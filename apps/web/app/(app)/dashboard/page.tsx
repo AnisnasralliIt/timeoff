@@ -1,14 +1,15 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { CalendarClock, ClipboardCheck, Plus } from "lucide-react";
-import { getTranslations } from "next-intl/server";
+import { getLocale, getTranslations } from "next-intl/server";
 import { prisma } from "@timeoff/db";
-import { availableBalance, todayISO } from "@timeoff/domain";
+import { availableBalance, accruedVacationAsOf, fixedAnnualAccrual, addDaysISO, todayISO, leaveYearRange } from "@timeoff/domain";
 import { requireAuth } from "@/lib/session";
 import { balanceHistoryFor, listPendingForApproval, syncCurrentAccruals } from "@/lib/services/leave";
 import { authorisationOverviewFor } from "@/lib/services/authorisations";
 import { Badge, BalanceRing, Button, Card, CardContent, CardDescription, CardHeader, CardTitle, statusVariant, type BadgeProps } from "@timeoff/ui";
 import { BalanceHistory } from "@/components/balance-history";
+import { resolveLeaveTypeName } from "@/lib/leave-type-name";
 
 export async function generateMetadata(): Promise<Metadata> {
   const t = await getTranslations("metadata");
@@ -18,6 +19,11 @@ export async function generateMetadata(): Promise<Metadata> {
 const LEAVE_TONE: Record<string, NonNullable<BadgeProps["tone"]>> = {
   Vacation: "vacation",
   "Sick Leave": "sick",
+};
+
+const DEFAULT_COLORS: Record<string, string> = {
+  Vacation: "#2e9486",
+  "Sick Leave": "#e07b5a",
 };
 
 function statusBadgeVariant(status: string): BadgeProps["variant"] {
@@ -36,6 +42,7 @@ export default async function DashboardPage() {
   const tHistory = await getTranslations("balanceHistory");
   const tStatus = await getTranslations("status");
   const tCommon = await getTranslations("common");
+  const locale = await getLocale();
 
   const [balances, recent, upcoming, history, historyLimit] = await Promise.all([
     (async () => {
@@ -63,7 +70,7 @@ export default async function DashboardPage() {
       orderBy: { startDate: "asc" },
       take: 4,
     }),
-    balanceHistoryFor(user, user.id),
+    balanceHistoryFor(user, user.id, locale),
     (async () => {
       const vacation = await prisma.leaveType.findFirst({ where: { companyId: user.companyId, name: "Vacation" } });
       if (!vacation) return null;
@@ -75,14 +82,97 @@ export default async function DashboardPage() {
     })(),
   ]);
 
+  // Lazy-seed missing balances for active leave types that pre-date this user.
+  const existingTypeIds = new Set(balances.map((b: (typeof balances)[number]) => b.leaveTypeId));
+  const dbUser = await prisma.user.findUnique({ where: { id: user.id } });
+  const leaveTypes = await prisma.leaveType.findMany({
+    where: { companyId: user.companyId, isArchived: false },
+    orderBy: { sortOrder: "asc" },
+  });
+  const missingTypes = leaveTypes.filter((lt) => !existingTypeIds.has(lt.id));
+  if (missingTypes.length > 0 && dbUser) {
+    const company = await prisma.company.findUniqueOrThrow({ where: { id: user.companyId! } });
+    const fiscal = company.fiscalYearStartMonth;
+    const year = Number(today.slice(0, 4));
+    const month = Number(today.slice(5, 7));
+    const startYear = fiscal > 1 && month < fiscal ? year - 1 : year;
+    const { start, end } = leaveYearRange(fiscal, startYear);
+    const ratio = dbUser.employmentType === "PART_TIME" ? 0.5 : 1;
+
+    const policies = await prisma.leavePolicy.findMany({
+      where: { companyId: user.companyId!, annualAllotment: { gt: 0 } },
+      select: {
+        leaveTypeId: true,
+        departmentId: true,
+        countryCode: true,
+        annualAllotment: true,
+        leaveType: { select: { accrualMethod: true } },
+      },
+    });
+
+    for (const lt of missingTypes) {
+      const matches = policies.filter(
+        (p) =>
+          p.leaveTypeId === lt.id &&
+          (p.departmentId === null || p.departmentId === dbUser.departmentId) &&
+          (p.countryCode === null || p.countryCode === dbUser.countryCode),
+      );
+      const policy =
+        matches.find((p) => p.departmentId === dbUser.departmentId) ??
+        matches.find((p) => p.departmentId === null) ??
+        null;
+      if (!policy || policy.annualAllotment <= 0) continue;
+
+      const asOf = today < end ? today : end;
+      const method = policy.leaveType.accrualMethod ?? "CUMULATIVE_MONTHLY";
+      let accrued: number;
+      if (method === "FIXED_ANNUAL") {
+        accrued = fixedAnnualAccrual({
+          annualAllotment: policy.annualAllotment,
+          employmentStartDate: dbUser.employmentStartDate,
+          asOf,
+          fullTimeRatio: ratio,
+        });
+      } else {
+        const cumulative = accruedVacationAsOf({
+          annualAllotment: policy.annualAllotment,
+          employmentStartDate: dbUser.employmentStartDate,
+          asOf,
+          fullTimeRatio: ratio,
+        });
+        const prior = accruedVacationAsOf({
+          annualAllotment: policy.annualAllotment,
+          employmentStartDate: dbUser.employmentStartDate,
+          asOf: addDaysISO(start, -1),
+          fullTimeRatio: ratio,
+        });
+        accrued = Math.max(0, Math.round((cumulative - prior) * 100) / 100);
+      }
+
+      const row = await prisma.leaveBalance.create({
+        data: {
+          companyId: user.companyId!,
+          userId: user.id,
+          leaveTypeId: lt.id,
+          periodStart: start,
+          periodEnd: end,
+          accrued,
+          carriedOver: 0,
+          adjustment: 0,
+          used: 0,
+          pending: 0,
+        },
+        include: { leaveType: true },
+      });
+      balances.push(row);
+    }
+  }
+
   const showApprovals = user.role !== "EMPLOYEE";
   const pendingForApproval = showApprovals ? (await listPendingForApproval(user)).slice(0, 5) : [];
   const authorisations = await authorisationOverviewFor(user);
 
-  const vacation = balances.find((b: (typeof balances)[number]) => b.leaveType.unit === "DAYS");
   const firstName = user.name.split(" ")[0] ?? user.name;
-  const gross = vacation ? vacation.accrued + vacation.carriedOver + vacation.adjustment : 0;
-  const usedFraction = vacation && gross > 0 ? (vacation.used + vacation.pending) / gross : 0;
 
   return (
     <div className="space-y-8">
@@ -104,57 +194,74 @@ export default async function DashboardPage() {
       </div>
 
       <div className="grid gap-6 lg:grid-cols-3">
-        <Card className={showApprovals ? "lg:col-span-1" : "lg:col-span-3"}>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <CalendarClock className="size-4 text-muted-foreground" />
-              {t("vacationBalance")}
-            </CardTitle>
-            <CardDescription>
-              {t("leaveYear", {
-                start: vacation ? vacation.periodStart : "—",
-                end: vacation ? vacation.periodEnd : "—",
-              })}
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            {vacation ? (
-              <div className="flex items-center gap-6">
-                <BalanceRing
-                  value={usedFraction}
-                  center={
-                    <div className="text-center">
-                      <p className="font-display text-2xl font-semibold leading-none">
-                        {availableBalance(vacation)}
-                      </p>
-                      <p className="mt-1 text-xs text-muted-foreground">{t("available")}</p>
+        {balances.length > 0 ? (
+          <div className={showApprovals ? "lg:col-span-1 space-y-6" : "lg:col-span-3 grid gap-6 sm:grid-cols-2 lg:grid-cols-3"}>
+            {balances.map((b: (typeof balances)[number]) => {
+              const gross = b.accrued + b.carriedOver + b.adjustment;
+              const usedFraction = gross > 0 ? (b.used + b.pending) / gross : 0;
+              const ringColor = b.leaveType.color || DEFAULT_COLORS[b.leaveType.name] || undefined;
+              return (
+                <Card key={b.id}>
+                  <CardHeader>
+                    <CardTitle className="flex items-center gap-2">
+                      <CalendarClock className="size-4 text-muted-foreground" />
+                      {resolveLeaveTypeName(b.leaveType, locale)}
+                    </CardTitle>
+                    <CardDescription>
+                      {t("leaveYear", { start: b.periodStart, end: b.periodEnd })}
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="flex items-center gap-6">
+                      <BalanceRing
+                        value={usedFraction}
+                        color={ringColor}
+                        center={
+                          <div className="text-center">
+                            <p className="font-display text-2xl font-semibold leading-none">
+                              {availableBalance(b)}
+                            </p>
+                            <p className="mt-1 text-xs text-muted-foreground">{t("available")}</p>
+                          </div>
+                        }
+                      />
+                      <dl className="space-y-1.5 text-sm">
+                        <div className="flex justify-between gap-6">
+                          <dt className="text-muted-foreground">{t("accrued")}</dt>
+                          <dd className="font-medium">{b.accrued}</dd>
+                        </div>
+                        <div className="flex justify-between gap-6">
+                          <dt className="text-muted-foreground">{t("carriedOver")}</dt>
+                          <dd className="font-medium">{b.carriedOver}</dd>
+                        </div>
+                        <div className="flex justify-between gap-6">
+                          <dt className="text-muted-foreground">{t("used")}</dt>
+                          <dd className="font-medium">{b.used}</dd>
+                        </div>
+                        <div className="flex justify-between gap-6">
+                          <dt className="text-muted-foreground">{t("pending")}</dt>
+                          <dd className="font-medium">{b.pending}</dd>
+                        </div>
+                      </dl>
                     </div>
-                  }
-                />
-                <dl className="space-y-1.5 text-sm">
-                  <div className="flex justify-between gap-6">
-                    <dt className="text-muted-foreground">{t("accrued")}</dt>
-                    <dd className="font-medium">{vacation.accrued}</dd>
-                  </div>
-                  <div className="flex justify-between gap-6">
-                    <dt className="text-muted-foreground">{t("carriedOver")}</dt>
-                    <dd className="font-medium">{vacation.carriedOver}</dd>
-                  </div>
-                  <div className="flex justify-between gap-6">
-                    <dt className="text-muted-foreground">{t("used")}</dt>
-                    <dd className="font-medium">{vacation.used}</dd>
-                  </div>
-                  <div className="flex justify-between gap-6">
-                    <dt className="text-muted-foreground">{t("pending")}</dt>
-                    <dd className="font-medium">{vacation.pending}</dd>
-                  </div>
-                </dl>
-              </div>
-            ) : (
+                  </CardContent>
+                </Card>
+              );
+            })}
+          </div>
+        ) : (
+          <Card className={showApprovals ? "lg:col-span-1" : "lg:col-span-3"}>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <CalendarClock className="size-4 text-muted-foreground" />
+                {t("vacationBalance")}
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
               <p className="text-sm text-muted-foreground">{t("noActiveBalance")}</p>
-            )}
-          </CardContent>
-        </Card>
+            </CardContent>
+          </Card>
+        )}
 
         {showApprovals ? (
           <Card className="lg:col-span-2">
@@ -179,7 +286,7 @@ export default async function DashboardPage() {
                         </p>
                       </div>
                       <Badge tone={LEAVE_TONE[request.leaveType.name] ?? "custom"} className="shrink-0">
-                        {request.leaveType.name}
+                        {resolveLeaveTypeName(request.leaveType, locale)}
                       </Badge>
                     </li>
                   ))}
@@ -205,7 +312,7 @@ export default async function DashboardPage() {
                     <div className="min-w-0">
                       <p className="text-sm font-medium">{formatSpan(request.startDate, request.endDate)}</p>
                       <p className="truncate text-xs text-muted-foreground">
-                        {request.leaveType.name} · {tCommon("dayCount", { count: request.totalDays })}
+                        {resolveLeaveTypeName(request.leaveType, locale)} · {tCommon("dayCount", { count: request.totalDays })}
                       </p>
                     </div>
                     <Badge variant={statusBadgeVariant(request.status)}>{tStatus(request.status)}</Badge>
@@ -230,7 +337,7 @@ export default async function DashboardPage() {
                     <div className="min-w-0">
                       <p className="text-sm font-medium">{formatSpan(request.startDate, request.endDate)}</p>
                       <p className="truncate text-xs text-muted-foreground">
-                        {request.leaveType.name} · {tCommon("dayCount", { count: request.totalDays })}
+                        {resolveLeaveTypeName(request.leaveType, locale)} · {tCommon("dayCount", { count: request.totalDays })}
                       </p>
                     </div>
                     <Badge variant={statusBadgeVariant(request.status)}>{tStatus(request.status)}</Badge>

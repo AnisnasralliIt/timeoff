@@ -5,14 +5,17 @@ import {
   availableBalance,
   cappedCarryOver,
   computeLeaveDays,
+  fixedAnnualAccrual,
   isValidISODate,
   LeaveSpanError,
   leaveYearRange,
   spansOverlap,
   todayISO,
   carryOverDeadline,
+  type AccrualMethod,
 } from "@timeoff/domain";
 import type { SessionUser } from "@/lib/session";
+import { resolveLeaveTypeName } from "@/lib/leave-type-name";
 import { attachStagedAttachments, AttachmentError } from "@/lib/services/attachments";
 import { enqueueOutbox } from "@/lib/emails";
 import { enqueueEmails } from "@/lib/queue";
@@ -226,8 +229,24 @@ function perYearAccrued(options: {
   periodStart: string;
   periodEnd: string;
   asOf: string;
+  accrualMethod?: AccrualMethod;
 }): number {
   const asOf = options.asOf < options.periodEnd ? options.asOf : options.periodEnd;
+  const method = options.accrualMethod ?? "CUMULATIVE_MONTHLY";
+
+  if (method === "FIXED_ANNUAL") {
+    // Fixed annual: the full allotment is available from the start of the leave year.
+    // No monthly proration — the employee gets the full amount upfront.
+    const full = fixedAnnualAccrual({
+      annualAllotment: options.annualAllotment,
+      employmentStartDate: options.employmentStartDate,
+      asOf,
+      fullTimeRatio: options.fullTimeRatio,
+    });
+    return full;
+  }
+
+  // Cumulative monthly: 1/12 of annual allotment per month of service.
   const cumulative = accruedVacationAsOf({
     annualAllotment: options.annualAllotment,
     employmentStartDate: options.employmentStartDate,
@@ -290,6 +309,7 @@ async function carryOverFor(
   policy: { annualAllotment: number; carryOverDays: number },
   targetYearStart: string,
   ctx?: CarryOverContext,
+  accrualMethod?: AccrualMethod,
 ): Promise<number> {
   if (policy.carryOverDays <= 0) return 0;
   const targetStartYear = Number(targetYearStart.slice(0, 4));
@@ -298,7 +318,8 @@ async function carryOverFor(
 
   // Everything the employee could ever have drawn on through the end of the
   // last complete leave year before the target year.
-  const earnedThroughPriorYear = accruedVacationAsOf({
+  const accruedFn = accrualMethod === "FIXED_ANNUAL" ? fixedAnnualAccrual : accruedVacationAsOf;
+  const earnedThroughPriorYear = accruedFn({
     annualAllotment: policy.annualAllotment,
     employmentStartDate: user.employmentStartDate,
     asOf: priorRange.end,
@@ -356,6 +377,7 @@ async function reconcileBalanceRow(
   policy: { annualAllotment: number; carryOverDays: number },
   row: CurrentBalanceRow,
   ctx?: CarryOverContext,
+  accrualMethod?: AccrualMethod,
 ) {
   const today = todayISO();
   const ratio = user.employmentType === "PART_TIME" ? 0.5 : 1;
@@ -367,6 +389,7 @@ async function reconcileBalanceRow(
     periodStart: row.periodStart,
     periodEnd: row.periodEnd,
     asOf,
+    accrualMethod,
   });
   const current = currentLeaveYear(company.fiscalYearStartMonth, today);
   let freshCarriedOver = row.carriedOver;
@@ -379,6 +402,7 @@ async function reconcileBalanceRow(
       policy,
       row.periodStart,
       ctx,
+      accrualMethod,
     );
   }
   const data: { accrued?: number; carriedOver?: number } = {};
@@ -421,6 +445,9 @@ export async function syncCurrentAccruals(db: Db, companyId: string, userId?: st
     include: {
       user: {
         select: { employmentStartDate: true, employmentType: true, departmentId: true, countryCode: true },
+      },
+      leaveType: {
+        select: { accrualMethod: true },
       },
     },
   });
@@ -475,6 +502,7 @@ export async function syncCurrentAccruals(db: Db, companyId: string, userId?: st
       policy,
       row,
       carryOverContext,
+      row.leaveType.accrualMethod as AccrualMethod,
     );
     if (updated.accrued !== row.accrued || updated.carriedOver !== row.carriedOver) {
       await audit(db, {
@@ -522,6 +550,7 @@ export async function resolveBalanceForDate(
   leaveTypeId: string,
   policy: { annualAllotment: number; carryOverDays: number } | null,
   onDate: string,
+  accrualMethod?: AccrualMethod,
 ): Promise<BalanceResolution | null> {
   const today = todayISO();
   const ratio = user.employmentType === "PART_TIME" ? 0.5 : 1;
@@ -534,7 +563,7 @@ export async function resolveBalanceForDate(
     // single engine the display paths use. Manual adjustment, used and
     // pending are never touched.
     if (policy && existing.periodStart <= today && existing.periodEnd >= today) {
-      const updated = await reconcileBalanceRow(db, company, user, policy, existing);
+      const updated = await reconcileBalanceRow(db, company, user, policy, existing, undefined, accrualMethod);
       return { existing: true, row: updated, available: availableBalance(updated) };
     }
     return { existing: true, row: existing, available: availableBalance(existing) };
@@ -549,11 +578,12 @@ export async function resolveBalanceForDate(
     periodStart: start,
     periodEnd: end,
     asOf: today,
+    accrualMethod,
   });
 
   let carriedOver = 0;
   if (policy.carryOverDays > 0) {
-    carriedOver = await carryOverFor(db, company, user, leaveTypeId, policy, start);
+    carriedOver = await carryOverFor(db, company, user, leaveTypeId, policy, start, undefined, accrualMethod);
   }
 
   return {
@@ -604,13 +634,25 @@ export async function seedBalancesForNewUser(
       countryCode: true,
       annualAllotment: true,
       carryOverDays: true,
+      leaveType: {
+        select: { accrualMethod: true },
+      },
     },
   });
   // Department-specific policy wins over the company-wide one (getPolicy).
-  const effective = new Map<string, (typeof policies)[number]>();
+  // Build a separate lookup for the raw prisma results (which include leaveType
+  // with accrualMethod) and a parallel lookup of effective policies for the
+  // balance seed.
+  const effective = new Map<string, { policy: AccrualPolicy; accrualMethod: AccrualMethod }>();
   for (const leaveTypeId of new Set(policies.map((p) => p.leaveTypeId))) {
-    const policy = effectivePolicyFor(policies, user.departmentId, user.countryCode, leaveTypeId);
-    if (policy) effective.set(leaveTypeId, policy);
+    const match = effectivePolicyFor(policies, user.departmentId, user.countryCode, leaveTypeId);
+    if (match) {
+      const raw = policies.find((p) => p.id === match.id)!;
+      effective.set(leaveTypeId, {
+        policy: match,
+        accrualMethod: raw.leaveType.accrualMethod as AccrualMethod,
+      });
+    }
   }
 
   const existing = await db.leaveBalance.findMany({
@@ -621,7 +663,7 @@ export async function seedBalancesForNewUser(
 
   const ratio = user.employmentType === "PART_TIME" ? 0.5 : 1;
   let created = 0;
-  for (const [leaveTypeId, policy] of effective) {
+  for (const [leaveTypeId, { policy, accrualMethod }] of effective) {
     if (existingTypes.has(leaveTypeId)) continue;
     await db.leaveBalance.create({
       data: {
@@ -637,6 +679,92 @@ export async function seedBalancesForNewUser(
           periodStart: start,
           periodEnd: end,
           asOf: today,
+          accrualMethod,
+        }),
+        carriedOver: 0,
+        adjustment: 0,
+        used: 0,
+        pending: 0,
+      },
+    });
+    created += 1;
+  }
+  return created;
+}
+
+/**
+ * When a new leave type is created, existing active employees won't have a
+ * LeaveBalance row for it. This function seeds the missing current-period
+ * balance for every active employee in the company so the request form
+ * immediately shows the correct available balance.
+ *
+ * Pattern mirrors `seedBalancesForNewUser` but scoped to a single leave type
+ * across all eligible users. Returns the number of balances created.
+ */
+export async function seedBalancesForNewLeaveType(
+  db: Db,
+  companyId: string,
+  leaveTypeId: string,
+): Promise<number> {
+  const today = todayISO();
+  const company = await db.company.findUniqueOrThrow({
+    where: { id: companyId },
+    select: { fiscalYearStartMonth: true },
+  });
+  const fiscal = company.fiscalYearStartMonth;
+  const year = Number(today.slice(0, 4));
+  const month = Number(today.slice(5, 7));
+  const startYear = fiscal > 1 && month < fiscal ? year - 1 : year;
+  const { start, end } = leaveYearRange(fiscal, startYear);
+
+  const policies = await db.leavePolicy.findMany({
+    where: { companyId, annualAllotment: { gt: 0 } },
+    select: {
+      id: true,
+      leaveTypeId: true,
+      departmentId: true,
+      countryCode: true,
+      annualAllotment: true,
+      carryOverDays: true,
+      leaveType: { select: { accrualMethod: true } },
+    },
+  });
+  const policyForType = policies.find((p) => p.leaveTypeId === leaveTypeId);
+  if (!policyForType) return 0;
+
+  const users = await db.user.findMany({
+    where: { companyId, status: "ACTIVE" },
+    select: { id: true, employmentStartDate: true, employmentType: true, departmentId: true, countryCode: true },
+  });
+
+  const existing = await db.leaveBalance.findMany({
+    where: { companyId, leaveTypeId, periodStart: start, periodEnd: end },
+    select: { userId: true },
+  });
+  const existingUserIds = new Set(existing.map((b) => b.userId));
+
+  const accrualMethod = policyForType.leaveType.accrualMethod as AccrualMethod;
+  let created = 0;
+  for (const u of users) {
+    if (existingUserIds.has(u.id)) continue;
+    const effective = effectivePolicyFor(policies, u.departmentId, u.countryCode, leaveTypeId);
+    if (!effective) continue;
+    const ratio = u.employmentType === "PART_TIME" ? 0.5 : 1;
+    await db.leaveBalance.create({
+      data: {
+        companyId,
+        userId: u.id,
+        leaveTypeId,
+        periodStart: start,
+        periodEnd: end,
+        accrued: perYearAccrued({
+          annualAllotment: effective.annualAllotment,
+          employmentStartDate: u.employmentStartDate,
+          fullTimeRatio: ratio,
+          periodStart: start,
+          periodEnd: end,
+          asOf: today,
+          accrualMethod,
         }),
         carriedOver: 0,
         adjustment: 0,
@@ -993,6 +1121,7 @@ export async function createLeaveRequest(user: SessionUser, input: CreateLeaveIn
     leaveTypeId,
     policy,
     startDate,
+    leaveType.accrualMethod as AccrualMethod,
   );
   if (balance && totalDays > balance.available) {
     const shortage = totalDays - balance.available;
@@ -1621,6 +1750,16 @@ export async function listDelegationCandidates(user: SessionUser) {
 
 /* --------------------------- Balance history ----------------------------- */
 
+export interface BalanceHistoryLeaveType {
+  leaveType: string;
+  accrued: number;
+  carriedOver: number;
+  adjustment: number;
+  used: number;
+  pending: number;
+  available: number;
+}
+
 export interface BalanceHistoryActivity {
   startDate: string;
   endDate: string;
@@ -1633,14 +1772,8 @@ export interface BalanceHistoryActivity {
 export interface BalanceHistoryYear {
   periodStart: string;
   periodEnd: string;
-  leaveType: string;
-  accrued: number;
-  carriedOver: number;
-  adjustment: number;
-  used: number;
-  pending: number;
-  available: number;
   isCurrent: boolean;
+  leaveTypes: BalanceHistoryLeaveType[];
   activity: BalanceHistoryActivity[];
 }
 
@@ -1661,6 +1794,7 @@ export interface BalanceHistoryYear {
 export async function balanceHistoryFor(
   viewer: SessionUser,
   targetUserId: string,
+  locale?: string,
 ): Promise<BalanceHistoryYear[]> {
   const isPeopleOps = PEOPLE_OPS_ROLES.has(viewer.role ?? "EMPLOYEE");
   if (!isPeopleOps && viewer.id !== targetUserId) {
@@ -1681,7 +1815,7 @@ export async function balanceHistoryFor(
   const [rows, requests] = await Promise.all([
     prisma.leaveBalance.findMany({
       where: { companyId: viewer.companyId, userId: targetUserId },
-      include: { leaveType: { select: { name: true } } },
+      include: { leaveType: { select: { name: true, nameEn: true, nameFr: true } } },
       orderBy: { periodStart: "desc" },
     }),
     prisma.leaveRequest.findMany({
@@ -1690,7 +1824,7 @@ export async function balanceHistoryFor(
         userId: targetUserId,
         status: { in: ["APPROVED", "PENDING"] },
       },
-      include: { leaveType: { select: { name: true } } },
+      include: { leaveType: { select: { name: true, nameEn: true, nameFr: true } } },
       orderBy: { startDate: "asc" },
     }),
   ]);
@@ -1704,7 +1838,7 @@ export async function balanceHistoryFor(
     bucket.activity.push({
       startDate: r.startDate,
       endDate: r.endDate,
-      leaveType: r.leaveType.name,
+      leaveType: locale ? resolveLeaveTypeName(r.leaveType, locale) : r.leaveType.name,
       totalDays: r.totalDays,
       status: r.status,
       reason: r.reason,
@@ -1712,20 +1846,40 @@ export async function balanceHistoryFor(
     byYear.set(start, bucket);
   }
 
-  return rows.map((row) => {
-    const bucket = byYear.get(row.periodStart);
-    return {
-      periodStart: row.periodStart,
-      periodEnd: row.periodEnd,
-      leaveType: row.leaveType.name,
+  // Group leave-type rows by periodStart so each year appears exactly once.
+  const yearMap = new Map<string, {
+    periodStart: string;
+    periodEnd: string;
+    isCurrent: boolean;
+    leaveTypes: BalanceHistoryLeaveType[];
+  }>();
+
+  for (const row of rows) {
+    const key = row.periodStart;
+    const existing = yearMap.get(key);
+    const lt: BalanceHistoryLeaveType = {
+      leaveType: locale ? resolveLeaveTypeName(row.leaveType, locale) : row.leaveType.name,
       accrued: row.accrued,
       carriedOver: row.carriedOver,
       adjustment: row.adjustment,
       used: row.used,
       pending: row.pending,
       available: availableBalance(row),
-      isCurrent: row.periodStart <= today && row.periodEnd >= today,
-      activity: bucket?.activity ?? [],
     };
-  });
+    if (existing) {
+      existing.leaveTypes.push(lt);
+    } else {
+      yearMap.set(key, {
+        periodStart: row.periodStart,
+        periodEnd: row.periodEnd,
+        isCurrent: row.periodStart <= today && row.periodEnd >= today,
+        leaveTypes: [lt],
+      });
+    }
+  }
+
+  return Array.from(yearMap.values()).map((year) => ({
+    ...year,
+    activity: byYear.get(year.periodStart)?.activity ?? [],
+  }));
 }

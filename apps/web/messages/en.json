@@ -98,7 +98,9 @@
   "dayPart": {
     "FULL": "Full day",
     "FIRST_HALF": "Morning",
-    "SECOND_HALF": "Afternoon"
+    "SECOND_HALF": "Afternoon",
+    "FIRST_HALF_SHORT": "AM",
+    "SECOND_HALF_SHORT": "PM"
   },
   "common": {
     "cancel": "Cancel",
@@ -112,7 +114,13 @@
     "prevRange": "Previous period",
     "nextRange": "Next period",
     "unread": "Unread",
-    "close": "Close"
+    "close": "Close",
+    "dateRange": {
+      "pickDates": "Pick dates",
+      "pickStartDate": "Pick a start date",
+      "from": "From {date}",
+      "reset": "Reset"
+    }
   },
   "timeAgo": {
     "justNow": "just now",
@@ -769,7 +777,9 @@
     "editUser": {
       "trigger": "Edit",
       "saving": "Saving…",
-      "saveChanges": "Save changes"
+      "saveChanges": "Save changes",
+      "fullName": "Full name",
+      "email": "Email"
     },
     "changePassword": {
       "trigger": "Change password",
@@ -822,10 +832,23 @@
       "requiresApproval": "Requires approval",
       "requiresAttachment": "Requires attachment",
       "paidLeave": "Paid leave",
+      "accrualMethod": "Accrual method",
+      "accrualMethodCumulative": "Cumulative monthly",
+      "accrualMethodCumulativeHint": "Accrues 1/12 of the annual allotment per month of service.",
+      "accrualMethodFixedAnnual": "Fixed annual",
+      "accrualMethodFixedAnnualHint": "Full annual allotment available from day one of the leave year.",
       "allowNegative": "Allow negative",
       "create": "Create leave type",
       "creating": "Creating…",
       "editTrigger": "Edit policy",
+      "editLeaveTypeTrigger": "Edit display names",
+      "editLeaveTypeTitle": "Edit display names",
+      "editLeaveTypeDescription": "Set the English and French display names for this leave type. The internal name ({name}) stays unchanged.",
+      "nameEn": "English name",
+      "nameFr": "French name",
+      "nameEnPlaceholder": "e.g. Annual Leave",
+      "nameFrPlaceholder": "ex. Congé annuel",
+      "saveDisplayNames": "Save display names",
       "carryOverExpiresOn": "Carry-over expires on (MM-DD)",
       "allowNegativeBalances": "Allow negative balances",
       "overrideApproval": "Override approval requirement",

@@ -86,6 +86,12 @@ export function EditUserDialog({
           <input type="hidden" name="managerId" value={managerId} />
           <input type="hidden" name="employmentType" value={employmentType} />
           <div className="grid gap-4 sm:grid-cols-2">
+            <Field label={tEdit("fullName")} id="editName">
+              <Input id="editName" name="name" defaultValue={user.name} />
+            </Field>
+            <Field label={tEdit("email")} id="editEmail">
+              <Input id="editEmail" name="email" type="email" defaultValue={user.email} />
+            </Field>
             <Field label={t("role")} id="role">
               <Select value={role} onValueChange={setRole}>
                 <SelectTrigger id="role">

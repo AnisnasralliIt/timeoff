@@ -7,6 +7,8 @@
  */
 import { isValidISODate, toISO } from "./dates";
 
+export type AccrualMethod = "CUMULATIVE_MONTHLY" | "FIXED_ANNUAL";
+
 export interface BalanceComponents {
   accrued: number;
   carriedOver: number;
@@ -55,6 +57,28 @@ export function accruedVacationAsOf(options: {
     (Number(asOf.slice(5, 7)) - Number(employmentStartDate.slice(5, 7))) +
     1;
   return round2((annualAllotment / 12) * months * fullTimeRatio);
+}
+
+/**
+ * Fixed annual accrual: the full annual allotment is available from the start
+ * of the leave year, regardless of when the employee started (as long as they
+ * have started by the calculation date). Used for leave types like sick leave
+ * where the full annual grant is available upfront rather than accruing monthly.
+ * fullTimeRatio scales for part-time contracts.
+ */
+export function fixedAnnualAccrual(options: {
+  annualAllotment: number;
+  employmentStartDate: string;
+  asOf: string;
+  fullTimeRatio?: number;
+}): number {
+  const { annualAllotment, employmentStartDate, asOf } = options;
+  const fullTimeRatio = options.fullTimeRatio ?? 1;
+  if (!isValidISODate(employmentStartDate) || !isValidISODate(asOf)) {
+    throw new RangeError("Invalid ISO date in fixedAnnualAccrual");
+  }
+  if (employmentStartDate > asOf) return 0;
+  return round2(annualAllotment * fullTimeRatio);
 }
 
 /** Accrual model (future): days earned = rate per working day × worked days. */

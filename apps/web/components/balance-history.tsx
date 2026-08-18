@@ -84,14 +84,21 @@ export function BalanceHistory({
               </button>
             </div>
             <CardContent>
-              <dl className="grid grid-cols-2 gap-x-6 gap-y-3 text-sm sm:grid-cols-3 lg:grid-cols-6">
-                <Stat label={t("accrued")} value={formatDays(year.accrued)} />
-                <Stat label={t("carriedOver")} value={formatDays(year.carriedOver)} />
-                <Stat label={t("used")} value={formatDays(year.used)} />
-                <Stat label={t("pending")} value={formatDays(year.pending)} />
-                <Stat label={t("adjustment")} value={formatDays(year.adjustment)} />
-                <Stat label={t("available")} value={formatDays(year.available)} emphasis />
-              </dl>
+              {year.leaveTypes.map((lt) => (
+                <div key={lt.leaveType} className="mt-3 first:mt-0">
+                  {year.leaveTypes.length > 1 ? (
+                    <h4 className="mb-1 text-xs font-semibold text-muted-foreground">{lt.leaveType}</h4>
+                  ) : null}
+                  <dl className="grid grid-cols-2 gap-x-6 gap-y-3 text-sm sm:grid-cols-3 lg:grid-cols-6">
+                    <Stat label={t("accrued")} value={formatDays(lt.accrued)} />
+                    <Stat label={t("carriedOver")} value={formatDays(lt.carriedOver)} />
+                    <Stat label={t("used")} value={formatDays(lt.used)} />
+                    <Stat label={t("pending")} value={formatDays(lt.pending)} />
+                    <Stat label={t("adjustment")} value={formatDays(lt.adjustment)} />
+                    <Stat label={t("available")} value={formatDays(lt.available)} emphasis />
+                  </dl>
+                </div>
+              ))}
 
               {isOpen ? (
                 <div className="mt-4 space-y-4 border-t border-border pt-4">

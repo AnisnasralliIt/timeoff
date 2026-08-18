@@ -1,10 +1,11 @@
 import type { Metadata } from "next";
-import { getTranslations } from "next-intl/server";
+import { getLocale, getTranslations } from "next-intl/server";
 import { requireRole } from "@/lib/session";
 import { listLeaveTypesForAdmin } from "@/lib/services/admin";
 import { Badge, Card, CardContent, CardHeader, CardTitle } from "@timeoff/ui";
-import { CreateLeaveTypeDialog, EditPolicyDialog } from "@/components/admin/leave-type-forms";
+import { CreateLeaveTypeDialog, EditLeaveTypeDialog, EditPolicyDialog } from "@/components/admin/leave-type-forms";
 import { LeaveTypeActions, ShowArchivedToggle } from "@/components/admin/leave-type-actions";
+import { resolveLeaveTypeName } from "@/lib/leave-type-name";
 
 export async function generateMetadata(): Promise<Metadata> {
   const t = await getTranslations("metadata");
@@ -21,6 +22,7 @@ export default async function AdminLeaveTypesPage({
   const showArchivedFlag = showArchived === "1";
   const leaveTypes = await listLeaveTypesForAdmin(user, { showArchived: showArchivedFlag });
   const t = await getTranslations("adminLeaveTypes");
+  const locale = await getLocale();
 
   const visibleCount = showArchivedFlag
     ? leaveTypes.filter((type) => !type.isArchived).length
@@ -40,6 +42,7 @@ export default async function AdminLeaveTypesPage({
       <div className="space-y-4">
         {leaveTypes.map((type: (typeof leaveTypes)[number]) => {
           const hasHistory = type._count.requests + type._count.balances > 0;
+          const displayName = resolveLeaveTypeName(type, locale);
           return (
             <Card key={type.id}>
               <CardHeader>
@@ -49,7 +52,7 @@ export default async function AdminLeaveTypesPage({
                       className="inline-block size-3 rounded-full"
                       style={{ backgroundColor: type.color }}
                     />
-                    {type.name}
+                    {displayName}
                     {type.isArchived ? <Badge variant="neutral">{t("archived")}</Badge> : null}
                     {type.isSystem ? <Badge variant="neutral">{t("system")}</Badge> : null}
                     <Badge variant={type.requiresApproval ? "warning" : "success"}>
@@ -59,12 +62,15 @@ export default async function AdminLeaveTypesPage({
                       <Badge variant="neutral">{t("attachmentRequired")}</Badge>
                     ) : null}
                   </CardTitle>
-                  <LeaveTypeActions
-                    leaveTypeId={type.id}
-                    name={type.name}
-                    isArchived={type.isArchived}
-                    hasHistory={hasHistory}
-                  />
+                  <div className="flex items-center gap-2">
+                    <EditLeaveTypeDialog leaveType={type} />
+                    <LeaveTypeActions
+                      leaveTypeId={type.id}
+                      name={displayName}
+                      isArchived={type.isArchived}
+                      hasHistory={hasHistory}
+                    />
+                  </div>
                 </div>
               </CardHeader>
               <CardContent className="space-y-3">

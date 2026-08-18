@@ -15,6 +15,7 @@ import { MonthView } from "@/components/calendar/month-view";
 import { ListView } from "@/components/calendar/list-view";
 import { TeamView } from "@/components/calendar/team-view";
 import { ExportButton } from "@/components/export-button";
+import { resolveLeaveTypeName } from "@/lib/leave-type-name";
 
 type ViewMode = "month" | "list" | "team";
 
@@ -23,7 +24,7 @@ interface CalendarExplorerProps {
   /** Whether the department filter is offered (company-wide roles only). */
   showDepartmentFilter: boolean;
   departments: { id: string; name: string }[];
-  leaveTypes: { id: string; name: string; color: string }[];
+  leaveTypes: { id: string; name: string; nameEn: string | null; nameFr: string | null; color: string }[];
   /** Company has the authorisations module enabled (hides the layer toggle). */
   authorisationsEnabled: boolean;
 }
@@ -309,6 +310,10 @@ export function CalendarExplorer({
             }}
             placeholder={t("customRange")}
             className="h-9"
+            locale={locale}
+            rangeHint={tCommon("dateRange.pickStartDate")}
+            rangeFromLabel={(date) => tCommon("dateRange.from", { date })}
+            resetLabel={tCommon("dateRange.reset")}
           />
           {isCustom ? (
             <Button
@@ -349,9 +354,9 @@ export function CalendarExplorer({
           aria-label={t("leaveTypeFilter")}
         >
           <option value="">{t("allLeaveTypes")}</option>
-          {leaveTypes.map((lt: { id: string; name: string; color: string }) => (
+          {leaveTypes.map((lt: { id: string; name: string; nameEn: string | null; nameFr: string | null; color: string }) => (
             <option key={lt.id} value={lt.id}>
-              {lt.name}
+              {resolveLeaveTypeName(lt, locale)}
             </option>
           ))}
         </select>

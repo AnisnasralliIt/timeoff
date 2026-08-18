@@ -22,6 +22,7 @@ import { workforceStats } from "@/lib/services/workforce";
 import { ExportButton } from "@/components/export-button";
 import { WorkforceFilters } from "@/components/workforce/workforce-filters";
 import { Badge, EmptyState } from "@timeoff/ui";
+import { resolveLeaveTypeName } from "@/lib/leave-type-name";
 
 export async function generateMetadata(): Promise<Metadata> {
   const t = await getTranslations("metadata");
@@ -232,7 +233,7 @@ export default async function WorkforcePage({
                           {row.departmentName}
                         </Badge>
                       ) : null}
-                      <p className="truncate text-xs text-muted-foreground">{row.leaveTypeName}</p>
+                      <p className="truncate text-xs text-muted-foreground">{resolveLeaveTypeName({ name: row.leaveTypeName, nameEn: row.leaveTypeNameEn, nameFr: row.leaveTypeNameFr }, locale)}</p>
                     </div>
                   </div>
                   <span className="shrink-0 text-xs text-muted-foreground">
@@ -274,7 +275,7 @@ export default async function WorkforcePage({
                               {row.userName}
                             </span>
                             <span className="block truncate text-xs text-muted-foreground">
-                              {row.leaveTypeName} · {formatRange(row.startDate, row.endDate, locale)}
+                              {resolveLeaveTypeName({ name: row.leaveTypeName, nameEn: row.leaveTypeNameEn, nameFr: row.leaveTypeNameFr }, locale)} · {formatRange(row.startDate, row.endDate, locale)}
                             </span>
                           </span>
                           <ArrowRight className="size-3.5 shrink-0 text-muted-foreground group-hover:text-primary" />
@@ -567,7 +568,7 @@ export default async function WorkforcePage({
                   ) : null}
                 </div>
                 <div className="flex shrink-0 items-center gap-3 text-xs text-muted-foreground">
-                  <span>{row.leaveTypeName}</span>
+                  <span>{resolveLeaveTypeName({ name: row.leaveTypeName, nameEn: row.leaveTypeNameEn, nameFr: row.leaveTypeNameFr }, locale)}</span>
                   <span>{formatRange(row.startDate, row.endDate, locale)}</span>
                 </div>
               </li>

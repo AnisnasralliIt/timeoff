@@ -136,6 +136,8 @@ export default async function CalendarPage() {
             leaveTypes={leaveTypes.map((lt: (typeof leaveTypes)[number]) => ({
               id: lt.id,
               name: lt.name,
+              nameEn: lt.nameEn,
+              nameFr: lt.nameFr,
               color: lt.color,
             }))}
           />

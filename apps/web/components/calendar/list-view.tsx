@@ -8,6 +8,7 @@ import { Badge, EmptyState, statusVariant, cn } from "@timeoff/ui";
 import { eachDay } from "@timeoff/domain";
 import { isHalfDay, type CalendarAuthorisation, type CalendarLeave } from "@/lib/calendar-shared";
 import { AuthorisationChip } from "@/components/calendar/authorisation-chip";
+import { resolveLeaveTypeName } from "@/lib/leave-type-name";
 
 interface ListViewProps {
   requests: CalendarLeave[];
@@ -104,7 +105,7 @@ export function ListView({ requests, holidays, authorisations, from, to }: ListV
                   >
                     <span className="size-2 shrink-0 rounded-full" style={{ background: r.leaveTypeColor }} aria-hidden />
                     <span className="truncate font-medium text-foreground">{r.userName}</span>
-                    <span className="truncate text-muted-foreground">{r.leaveTypeName}</span>
+                    <span className="truncate text-muted-foreground">{resolveLeaveTypeName({ name: r.leaveTypeName, nameEn: r.leaveTypeNameEn, nameFr: r.leaveTypeNameFr }, locale)}</span>
                     <HalfNote leave={r} />
                   </Link>
                 ))}
@@ -166,7 +167,7 @@ export function ListView({ requests, holidays, authorisations, from, to }: ListV
                     <span className="size-2 rounded-full" style={{ background: r.leaveTypeColor }} aria-hidden />
                     {r.startDate === r.endDate ? r.startDate : `${r.startDate} – ${r.endDate}`}
                   </Link>
-                  <span className="text-muted-foreground">{r.leaveTypeName}</span>
+                  <span className="text-muted-foreground">{resolveLeaveTypeName({ name: r.leaveTypeName, nameEn: r.leaveTypeNameEn, nameFr: r.leaveTypeNameFr }, locale)}</span>
                   <HalfNote leave={r} />
                   <span className="text-muted-foreground">{t("workingDays", { count: r.totalDays })}</span>
                   <Badge variant={statusVariant[r.status.toLowerCase()] ?? "neutral"}>

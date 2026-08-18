@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { getTranslations } from "next-intl/server";
+import { getLocale, getTranslations } from "next-intl/server";
 import { requireRole } from "@/lib/session";
 import { prisma } from "@timeoff/db";
 import { balanceIssueRows, listBalancesForAdmin } from "@/lib/services/admin";
@@ -25,6 +25,7 @@ export default async function AdminBalancesPage({
   const t = await getTranslations("adminBalances");
   const tAdmin = await getTranslations("admin");
   const tHistory = await getTranslations("balanceHistory");
+  const locale = await getLocale();
 
   const [users, leaveTypes] = await Promise.all([
     prisma.user.findMany({
@@ -34,7 +35,7 @@ export default async function AdminBalancesPage({
     }),
     prisma.leaveType.findMany({
       where: { companyId: user.companyId },
-      select: { id: true, name: true },
+      select: { id: true, name: true, nameEn: true, nameFr: true },
       orderBy: { sortOrder: "asc" },
     }),
   ]);
@@ -53,7 +54,7 @@ export default async function AdminBalancesPage({
   const [rows, history, historyLimit, selectedName] = await Promise.all([
     listBalancesForAdmin(user, { userId: effectiveUserId, leaveTypeId: params.type }),
     effectiveUserId
-      ? balanceHistoryFor(user, effectiveUserId).catch((error) =>
+      ? balanceHistoryFor(user, effectiveUserId, locale).catch((error) =>
           error instanceof LeaveError ? ([] as Awaited<ReturnType<typeof balanceHistoryFor>>) : Promise.reject(error),
         )
       : Promise.resolve([] as Awaited<ReturnType<typeof balanceHistoryFor>>),

@@ -80,8 +80,10 @@ export function Shell({
   const sidebar = (
     <div className="flex h-full flex-col">
       <div className="flex h-16 items-center gap-2.5 px-5">
-        <LogoMark />
-        <Wordmark />
+        <Link href="/dashboard" className="flex items-center gap-2.5">
+          <LogoMark />
+          <Wordmark />
+        </Link>
       </div>
       <Separator />
       <nav className="flex-1 space-y-5 overflow-y-auto px-3 py-5" aria-label={tNav("aria.main")}>
@@ -184,9 +186,9 @@ export function Shell({
             >
               <Menu />
             </Button>
-            <span className="lg:hidden">
+            <Link href="/dashboard" className="lg:hidden">
               <LogoMark />
-            </span>
+            </Link>
           </div>
           <div className="flex items-center gap-1">
             <LocaleToggle />

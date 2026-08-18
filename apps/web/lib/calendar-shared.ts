@@ -15,6 +15,8 @@ export interface CalendarLeave {
   departmentName: string;
   leaveTypeId: string;
   leaveTypeName: string;
+  leaveTypeNameEn: string | null;
+  leaveTypeNameFr: string | null;
   leaveTypeColor: string;
   startDate: string;
   endDate: string;

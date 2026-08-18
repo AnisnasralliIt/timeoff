@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { getTranslations } from "next-intl/server";
+import { getLocale, getTranslations } from "next-intl/server";
 import { ArrowLeft, CalendarClock, Download, FileText, Paperclip } from "lucide-react";
 import { prisma } from "@timeoff/db";
 import { requireAuth } from "@/lib/session";
@@ -11,6 +11,7 @@ import { Badge, Button, Card, CardContent, CardHeader, CardTitle, EmptyState, ty
 import { ApproveButton, RejectRequestDialog } from "@/components/approval-actions";
 import { AddAttachmentButton, DeleteAttachmentButton } from "@/components/attachment-actions";
 import { CancelRequestDialog } from "@/components/cancel-request-dialog";
+import { resolveLeaveTypeName } from "@/lib/leave-type-name";
 
 export async function generateMetadata(): Promise<Metadata> {
   const t = await getTranslations("metadata");
@@ -28,8 +29,11 @@ function statusVariant(status: string): BadgeProps["variant"] {
   return map[status.toLowerCase()] ?? "neutral";
 }
 
-function formatSpan(start: string, end: string, startPart: string, endPart: string): string {
-  const part = (p: string) => (p === "FULL" ? "" : p === "FIRST_HALF" ? " (AM)" : " (PM)");
+function formatSpan(start: string, end: string, startPart: string, endPart: string, tDayPart: (key: string) => string): string {
+  const part = (p: string) => {
+    if (p === "FULL") return "";
+    return ` (${p === "FIRST_HALF" ? tDayPart("FIRST_HALF_SHORT") : tDayPart("SECOND_HALF_SHORT")})`;
+  };
   if (start === end) return `${start}${part(startPart)}`;
   return `${start}${part(startPart)} – ${end}${part(endPart)}`;
 }
@@ -50,6 +54,8 @@ export default async function RequestDetailPage({ params }: { params: Promise<{ 
   const t = await getTranslations("requestDetail");
   const tStatus = await getTranslations("status");
   const tCommon = await getTranslations("common");
+  const tDayPart = await getTranslations("dayPart");
+  const locale = await getLocale();
 
   const request = await prisma.leaveRequest.findFirst({
     where: { id, companyId: user.companyId },
@@ -107,7 +113,7 @@ export default async function RequestDetailPage({ params }: { params: Promise<{ 
           style={{ borderColor: `${request.leaveType.color}66` }}
         >
           <span className="inline-block size-2 rounded-full" style={{ backgroundColor: request.leaveType.color }} />
-          {request.leaveType.name}
+          {resolveLeaveTypeName(request.leaveType, locale)}
         </Badge>
         {request.leaveType.requiresAttachment ? (
           <Badge variant="neutral" className="font-normal">
@@ -123,7 +129,7 @@ export default async function RequestDetailPage({ params }: { params: Promise<{ 
             <div>
               <dt className="text-xs uppercase tracking-wide text-muted-foreground">{t("dates")}</dt>
               <dd className="mt-1 text-sm font-medium">
-                {formatSpan(request.startDate, request.endDate, request.startDayPart, request.endDayPart)}
+                {formatSpan(request.startDate, request.endDate, request.startDayPart, request.endDayPart, tDayPart)}
               </dd>
             </div>
             <div>

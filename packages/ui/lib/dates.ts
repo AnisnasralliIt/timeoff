@@ -47,6 +47,40 @@ const MONTHS = [
 
 const WEEKDAYS = ["Mo", "Tu", "We", "Th", "Fr", "Sa", "Su"];
 
+/**
+ * Locale-aware month label for the given year/month.
+ * UsesIntl.DateTimeFormat when a locale is provided, otherwise falls back
+ * to the English MONTHS array.
+ */
+export function localeMonthLabel(
+  year: number,
+  month: number,
+  locale?: string,
+): string {
+  if (locale) {
+    const d = new Date(year, month - 1, 1);
+    const monthStr = d.toLocaleDateString(locale, { month: "long" });
+    return `${monthStr} ${year}`;
+  }
+  return `${MONTHS[month - 1]} ${year}`;
+}
+
+/**
+ * Locale-aware abbreviated weekday labels (Mon-first order).
+ * Uses Intl.DateTimeFormat when a locale is provided.
+ */
+export function localeWeekdays(locale?: string): string[] {
+  if (locale) {
+    // Jan 1 2024 is a Monday — iterate Mon→Sun.
+    return [1, 2, 3, 4, 5, 6, 0].map((d) =>
+      new Date(2024, 0, 1 + d)
+        .toLocaleDateString(locale, { weekday: "short" })
+        .replace(".", ""),
+    );
+  }
+  return WEEKDAYS;
+}
+
 /** Monday-first grid for the given month (1 = Jan). */
 export function monthGrid(year: number, month: number): MonthGrid {
   const first = new Date(year, month - 1, 1);

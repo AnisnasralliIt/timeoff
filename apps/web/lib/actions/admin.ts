@@ -11,6 +11,7 @@ import {
   renameDepartmentForAdmin,
   deleteDepartmentForAdmin,
   createLeaveTypeForAdmin,
+  updateLeaveTypeForAdmin,
   updatePolicyForAdmin,
   archiveLeaveTypeForAdmin,
   reactivateLeaveTypeForAdmin,
@@ -81,6 +82,8 @@ export async function updateUserAction(
   const user = await requireAuth();
   try {
     await updateUserForAdmin(user, userId, {
+      name: String(formData.get("name") ?? ""),
+      email: String(formData.get("email") ?? ""),
       role: (String(formData.get("role") ?? "") as
         | "EMPLOYEE"
         | "MANAGER"
@@ -187,6 +190,7 @@ export async function createLeaveTypeAction(_prev: ActionState, formData: FormDa
     await createLeaveTypeForAdmin(user, {
       name: String(formData.get("name") ?? ""),
       color: String(formData.get("color") ?? "#2e9486"),
+      accrualMethod: String(formData.get("accrualMethod") ?? "CUMULATIVE_MONTHLY"),
       requiresApproval: formData.get("requiresApproval") === "on",
       requiresAttachment: formData.get("requiresAttachment") === "on",
       isPaid: formData.get("isPaid") === "on",
@@ -194,6 +198,25 @@ export async function createLeaveTypeAction(_prev: ActionState, formData: FormDa
       carryOverDays: Number(formData.get("carryOverDays") ?? 0),
       negativeAllowed: formData.get("negativeAllowed") === "on",
       probationDays: Number(formData.get("probationDays") ?? 0),
+    });
+    revalidateAdmin();
+    return { ok: true };
+  } catch (error) {
+    return toErrorState(error);
+  }
+}
+
+export async function updateLeaveTypeAction(
+  leaveTypeId: string,
+  _prev: ActionState,
+  formData: FormData,
+): Promise<ActionState> {
+  const user = await requireAuth();
+  try {
+    await updateLeaveTypeForAdmin(user, leaveTypeId, {
+      nameEn: String(formData.get("nameEn") ?? ""),
+      nameFr: String(formData.get("nameFr") ?? ""),
+      accrualMethod: String(formData.get("accrualMethod") ?? "") || undefined,
     });
     revalidateAdmin();
     return { ok: true };

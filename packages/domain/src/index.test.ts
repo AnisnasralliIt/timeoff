@@ -20,6 +20,7 @@ import {
   findConflicts,
   availableBalance,
   accruedVacationAsOf,
+  fixedAnnualAccrual,
   accrualDays,
   cappedCarryOver,
   leaveYearRange,
@@ -541,5 +542,41 @@ describe("balance", () => {
   it("never carries a negative leftover and a zero limit carries nothing", () => {
     expect(cappedCarryOver(15, -3)).toBe(0);
     expect(cappedCarryOver(0, 8)).toBe(0);
+  });
+
+  describe("fixedAnnualAccrual", () => {
+    it("returns the full annual allotment for an active employee", () => {
+      expect(fixedAnnualAccrual({ annualAllotment: 10, employmentStartDate: "2025-01-01", asOf: "2026-08-15" })).toBe(10);
+      expect(fixedAnnualAccrual({ annualAllotment: 20, employmentStartDate: "2025-01-01", asOf: "2026-08-15" })).toBe(20);
+    });
+
+    it("returns 0 when employment has not started yet", () => {
+      expect(fixedAnnualAccrual({ annualAllotment: 10, employmentStartDate: "2027-01-01", asOf: "2026-08-15" })).toBe(0);
+    });
+
+    it("returns full allotment even for very recent hires", () => {
+      expect(fixedAnnualAccrual({ annualAllotment: 10, employmentStartDate: "2026-08-10", asOf: "2026-08-15" })).toBe(10);
+    });
+
+    it("scales by part-time ratio", () => {
+      expect(fixedAnnualAccrual({ annualAllotment: 10, employmentStartDate: "2025-01-01", asOf: "2026-08-15", fullTimeRatio: 0.5 })).toBe(5);
+      expect(fixedAnnualAccrual({ annualAllotment: 18, employmentStartDate: "2025-01-01", asOf: "2026-01-01", fullTimeRatio: 0.5 })).toBe(9);
+    });
+
+    it("does not prorate by month unlike cumulative accrual", () => {
+      // Cumulative: 2 months of service → 2 × (18/12) = 3
+      expect(accruedVacationAsOf({ annualAllotment: 18, employmentStartDate: "2026-07-01", asOf: "2026-08-31" })).toBeCloseTo(3, 5);
+      // Fixed annual: same 2 months of service → full 18 days
+      expect(fixedAnnualAccrual({ annualAllotment: 18, employmentStartDate: "2026-07-01", asOf: "2026-08-31" })).toBe(18);
+    });
+
+    it("throws on invalid dates", () => {
+      expect(() => fixedAnnualAccrual({ annualAllotment: 10, employmentStartDate: "not-a-date", asOf: "2026-08-15" })).toThrow(RangeError);
+      expect(() => fixedAnnualAccrual({ annualAllotment: 10, employmentStartDate: "2025-01-01", asOf: "not-a-date" })).toThrow(RangeError);
+    });
+
+    it("handles zero allotment", () => {
+      expect(fixedAnnualAccrual({ annualAllotment: 0, employmentStartDate: "2025-01-01", asOf: "2026-08-15" })).toBe(0);
+    });
   });
 });

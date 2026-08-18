@@ -1,9 +1,10 @@
 "use client";
 
 import Link from "next/link";
-import { useTranslations } from "next-intl";
+import { useLocale, useTranslations } from "next-intl";
 import { Badge, Tooltip, TooltipContent, TooltipTrigger, statusVariant, cn } from "@timeoff/ui";
 import { isHalfDay, type BarSegment, type CalendarLeave } from "@/lib/calendar-shared";
+import { resolveLeaveTypeName } from "@/lib/leave-type-name";
 
 interface LeaveBarProps {
   leave: CalendarLeave;
@@ -30,6 +31,7 @@ export function LeaveBar({
 }: LeaveBarProps) {
   const t = useTranslations("calendar");
   const tDay = useTranslations("dayPart");
+  const locale = useLocale();
   const first = segs[0]!;
   const last = segs[segs.length - 1]!;
   const span = last.end - first.start + 1;
@@ -98,7 +100,7 @@ export function LeaveBar({
           <p className="text-sm font-medium text-foreground">{leave.userName}</p>
           <p className="flex items-center gap-1.5">
             <span className="size-2 shrink-0 rounded-full" style={{ background: leave.leaveTypeColor }} aria-hidden />
-            <span className="text-foreground">{leave.leaveTypeName}</span>
+            <span className="text-foreground">{resolveLeaveTypeName({ name: leave.leaveTypeName, nameEn: leave.leaveTypeNameEn, nameFr: leave.leaveTypeNameFr }, locale)}</span>
             <span className="text-muted-foreground">· {leave.departmentName}</span>
           </p>
           <p className="text-muted-foreground">{fullSpan}</p>

@@ -2,7 +2,7 @@
 
 import * as React from "react";
 import { useRouter } from "next/navigation";
-import { useTranslations } from "next-intl";
+import { useTranslations, useLocale } from "next-intl";
 import { computeLeaveDays, todayISO } from "@timeoff/domain";
 import { toast } from "@timeoff/ui";
 import { Button } from "@timeoff/ui";
@@ -13,12 +13,15 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Textarea } from "@timeoff/ui";
 import { CalendarClock } from "lucide-react";
 import { createLeaveRequestAction, type CreateRequestState } from "@/lib/actions/leave";
+import { resolveLeaveTypeName } from "@/lib/leave-type-name";
 import { AttachmentUpload } from "@/components/attachment-upload";
 import { useServerError } from "@/lib/client-error";
 
 interface LeaveTypeOption {
   id: string;
   name: string;
+  nameEn: string | null;
+  nameFr: string | null;
   isPaid: boolean;
   requiresApproval: boolean;
   requiresAttachment: boolean;
@@ -57,6 +60,8 @@ export function RequestForm({
   const t = useTranslations("requestForm");
   const tDayPart = useTranslations("dayPart");
   const tToast = useTranslations("toasts");
+  const tCommon = useTranslations("common");
+  const locale = useLocale();
   const translateError = useServerError();
   const [leaveTypeId, setLeaveTypeId] = React.useState<string>(leaveTypes[0]?.id ?? "");
   const [range, setRange] = React.useState<DateRange>({ from: null, to: null });
@@ -142,7 +147,7 @@ export function RequestForm({
               <SelectContent>
                 {leaveTypes.map((type: LeaveTypeOption) => (
                   <SelectItem key={type.id} value={type.id}>
-                    {type.name}
+                    {resolveLeaveTypeName(type, locale)}
                   </SelectItem>
                 ))}
               </SelectContent>
@@ -161,6 +166,11 @@ export function RequestForm({
               onChange={setRange}
               minDate={minDate}
               className="w-full"
+              locale={locale}
+              placeholder={tCommon("dateRange.pickDates")}
+              rangeHint={tCommon("dateRange.pickStartDate")}
+              rangeFromLabel={(date) => tCommon("dateRange.from", { date })}
+              resetLabel={tCommon("dateRange.reset")}
             />
           </Field>
 

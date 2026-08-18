@@ -11,6 +11,8 @@ import {
   toISODate,
   fromISODate,
   addDays,
+  localeMonthLabel,
+  localeWeekdays,
   type ISODate,
 } from "../lib/dates";
 
@@ -27,6 +29,15 @@ export interface DateRangePickerProps {
   maxDate?: ISODate;
   placeholder?: string;
   className?: string;
+  /** BCP-47 locale string (e.g. "en", "fr"). When provided, month and weekday
+   *  labels are rendered in that locale. */
+  locale?: string;
+  /** Hint shown at the bottom of the range picker (e.g. "Pick a start date"). */
+  rangeHint?: string;
+  /** Label shown when a range start is selected (e.g. "From {date}"). */
+  rangeFromLabel?: (date: string) => string;
+  /** Label for the "Reset" button. */
+  resetLabel?: string;
 }
 
 function dateLabel(r: DateRange): string {
@@ -48,6 +59,10 @@ export function DateRangePicker({
   maxDate,
   placeholder = "Pick dates",
   className,
+  locale,
+  rangeHint = "Pick a start date",
+  rangeFromLabel = (date) => `From ${date}`,
+  resetLabel = "Reset",
 }: DateRangePickerProps) {
   const [open, setOpen] = React.useState(false);
   const [view, setView] = React.useState(() => {
@@ -169,7 +184,8 @@ export function DateRangePicker({
             >
               <CalendarMonth
                 cells={monthGrid(view.year, view.month).cells}
-                monthLabel={monthGrid(view.year, view.month).monthLabel}
+                monthLabel={localeMonthLabel(view.year, view.month, locale)}
+                weekdayLabels={localeWeekdays(locale)}
                 onSelect={handleSelect}
                 rangeStart={rangeStart}
                 rangeEnd={effectiveEnd}
@@ -187,12 +203,12 @@ export function DateRangePicker({
                     view.month === 12 ? view.year + 1 : view.year,
                     view.month === 12 ? 1 : view.month + 1
                   ).cells}
-                  monthLabel={
-                    monthGrid(
-                      view.month === 12 ? view.year + 1 : view.year,
-                      view.month === 12 ? 1 : view.month + 1
-                    ).monthLabel
-                  }
+                  monthLabel={localeMonthLabel(
+                    view.month === 12 ? view.year + 1 : view.year,
+                    view.month === 12 ? 1 : view.month + 1,
+                    locale,
+                  )}
+                  weekdayLabels={localeWeekdays(locale)}
                   onSelect={handleSelect}
                   rangeStart={rangeStart}
                   rangeEnd={effectiveEnd}
@@ -210,8 +226,8 @@ export function DateRangePicker({
               <div className="flex items-center justify-between border-t border-border pt-2 text-xs text-muted-foreground">
                 <span>
                   {rangeStart
-                    ? `From ${rangeStart}`
-                    : "Pick a start date"}
+                    ? rangeFromLabel(rangeStart)
+                    : rangeHint}
                   {effectiveEnd ? ` · to ${effectiveEnd}` : ""}
                 </span>
                 {rangeStart && !value?.to ? (
@@ -220,7 +236,7 @@ export function DateRangePicker({
                     className="text-primary hover:underline"
                     onClick={() => onChange?.({ from: null, to: null })}
                   >
-                    Reset
+                    {resetLabel}
                   </button>
                 ) : null}
               </div>

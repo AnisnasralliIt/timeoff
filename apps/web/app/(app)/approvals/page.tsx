@@ -11,6 +11,7 @@ import { Badge, Card, CardContent, CardDescription, CardHeader, CardTitle, Empty
 import { ApproveButton, RejectRequestDialog } from "@/components/approval-actions";
 import { ApproveAuthorisationButton, RejectAuthorisationDialog } from "@/components/authorisations/authorisation-actions";
 import DelegationPanel from "@/components/delegation-panel";
+import { resolveLeaveTypeName } from "@/lib/leave-type-name";
 
 export async function generateMetadata(): Promise<Metadata> {
   const t = await getTranslations("metadata");
@@ -109,7 +110,7 @@ export default async function ApprovalsPage() {
                     <p className="mt-0.5 text-xs text-muted-foreground">
                       {formatSpan(request.startDate, request.endDate)} ·{" "}
                       {tCommon("dayCount", { count: request.totalDays })} ·{" "}
-                      {request.leaveType.name} · {t("submitted", { time: timeAgo(request.createdAt, locale, tTime) })}
+                      {resolveLeaveTypeName(request.leaveType, locale)} · {t("submitted", { time: timeAgo(request.createdAt, locale, tTime) })}
                     </p>
                     {request.reason ? (
                       <p className="mt-1 truncate text-xs text-muted-foreground italic">

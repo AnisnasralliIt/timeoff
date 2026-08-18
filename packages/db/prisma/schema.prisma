@@ -41,6 +41,11 @@ enum LeaveUnit {
   HOURS
 }
 
+enum AccrualMethod {
+  CUMULATIVE_MONTHLY
+  FIXED_ANNUAL
+}
+
 enum LeaveRequestStatus {
   DRAFT
   PENDING
@@ -194,8 +199,11 @@ model LeaveType {
   id                   String   @id @default(cuid())
   companyId            String
   name                 String
+  nameEn               String?
+  nameFr               String?
   color                String   @default("#2e9486") // leave-palette token hex
   unit                 LeaveUnit @default(DAYS)
+  accrualMethod        AccrualMethod @default(CUMULATIVE_MONTHLY)
   requiresApproval     Boolean  @default(true)
   requiresAttachment   Boolean  @default(false)
   isPaid               Boolean  @default(true)

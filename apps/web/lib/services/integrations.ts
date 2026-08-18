@@ -98,7 +98,7 @@ interface FeedRequest {
 export async function getApprovedRequestsForFeed(userId: string): Promise<FeedRequest[]> {
   return prisma.leaveRequest.findMany({
     where: { userId, status: "APPROVED" },
-    include: { leaveType: { select: { name: true } } },
+    include: { leaveType: { select: { name: true, nameEn: true, nameFr: true } } },
     orderBy: { startDate: "asc" },
   });
 }

@@ -1,12 +1,13 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { CalendarPlus, Inbox, Paperclip } from "lucide-react";
-import { getTranslations } from "next-intl/server";
+import { getLocale, getTranslations } from "next-intl/server";
 import { prisma } from "@timeoff/db";
 import { todayISO } from "@timeoff/domain";
 import { requireAuth } from "@/lib/session";
 import { Badge, Button, Card, CardContent, EmptyState, type BadgeProps } from "@timeoff/ui";
 import { CancelRequestDialog } from "@/components/cancel-request-dialog";
+import { resolveLeaveTypeName } from "@/lib/leave-type-name";
 
 export async function generateMetadata(): Promise<Metadata> {
   const t = await getTranslations("metadata");
@@ -24,8 +25,11 @@ function statusVariant(status: string): BadgeProps["variant"] {
   return map[status.toLowerCase()] ?? "neutral";
 }
 
-function formatSpan(start: string, end: string, startPart: string, endPart: string): string {
-  const part = (p: string) => (p === "FULL" ? "" : p === "FIRST_HALF" ? " (AM)" : " (PM)");
+function formatSpan(start: string, end: string, startPart: string, endPart: string, tDayPart: (key: string) => string): string {
+  const part = (p: string) => {
+    if (p === "FULL") return "";
+    return ` (${p === "FIRST_HALF" ? tDayPart("FIRST_HALF_SHORT") : tDayPart("SECOND_HALF_SHORT")})`;
+  };
   if (start === end) return `${start}${part(startPart)}`;
   return `${start}${part(startPart)} – ${end}${part(endPart)}`;
 }
@@ -36,6 +40,8 @@ export default async function RequestsPage() {
   const t = await getTranslations("requests");
   const tStatus = await getTranslations("status");
   const tCommon = await getTranslations("common");
+  const tDayPart = await getTranslations("dayPart");
+  const locale = await getLocale();
 
   const requests = await prisma.leaveRequest.findMany({
     where: { userId: user.id },
@@ -44,6 +50,7 @@ export default async function RequestsPage() {
       _count: { select: { attachments: { where: { deletedAt: null } } } },
     },
     orderBy: { createdAt: "desc" },
+    take: 15,
   });
 
   const company = await prisma.company.findUniqueOrThrow({ where: { id: user.companyId! } });
@@ -98,6 +105,7 @@ export default async function RequestsPage() {
                             request.endDate,
                             request.startDayPart,
                             request.endDayPart,
+                            tDayPart,
                           )}
                         </p>
                         <Badge variant={statusVariant(request.status)}>
@@ -105,7 +113,7 @@ export default async function RequestsPage() {
                         </Badge>
                       </div>
                       <p className="mt-0.5 truncate text-xs text-muted-foreground">
-                        {request.leaveType.name} · {tCommon("dayCount", { count: request.totalDays })}
+                        {resolveLeaveTypeName(request.leaveType, locale)} · {tCommon("dayCount", { count: request.totalDays })}
                         {request.reason ? ` · “${request.reason}”` : ""}
                         {request.rejectionReason ? (
                           <span className="text-destructive"> · {t("rejected", { reason: request.rejectionReason })}</span>

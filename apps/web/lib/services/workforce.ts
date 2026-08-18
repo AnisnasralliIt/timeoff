@@ -108,7 +108,7 @@ export async function workforceStats(user: SessionUser, filters: WorkforceFilter
         },
         include: {
           user: { include: { department: true } },
-          leaveType: { select: { name: true, color: true } },
+          leaveType: { select: { name: true, nameEn: true, nameFr: true, color: true } },
         },
       }),
       prisma.leaveRequest.count({
@@ -129,7 +129,7 @@ export async function workforceStats(user: SessionUser, filters: WorkforceFilter
         },
         include: {
           user: { include: { department: true } },
-          leaveType: { select: { name: true, color: true } },
+          leaveType: { select: { name: true, nameEn: true, nameFr: true, color: true } },
         },
       }),
       prisma.leaveBalance.findMany({
@@ -145,7 +145,7 @@ export async function workforceStats(user: SessionUser, filters: WorkforceFilter
         },
         include: {
           user: { select: { id: true, name: true, departmentId: true } },
-          leaveType: { select: { name: true } },
+          leaveType: { select: { name: true, nameEn: true, nameFr: true } },
         },
       }),
       prisma.department.findMany({
@@ -163,7 +163,7 @@ export async function workforceStats(user: SessionUser, filters: WorkforceFilter
         },
         include: {
           user: { include: { department: true } },
-          leaveType: { select: { name: true, color: true } },
+          leaveType: { select: { name: true, nameEn: true, nameFr: true, color: true } },
         },
         orderBy: { startDate: "asc" },
         take: 8,
@@ -228,6 +228,8 @@ export async function workforceStats(user: SessionUser, filters: WorkforceFilter
       userName: r.user.name,
       departmentName: r.user.department?.name ?? null,
       leaveTypeName: r.leaveType.name,
+      leaveTypeNameEn: r.leaveType.nameEn,
+      leaveTypeNameFr: r.leaveType.nameFr,
       startDate: r.startDate,
       endDate: r.endDate,
     }));
@@ -458,6 +460,8 @@ export async function workforceStats(user: SessionUser, filters: WorkforceFilter
       userName: r.user.name,
       departmentName: r.user.department?.name ?? null,
       leaveTypeName: r.leaveType.name,
+      leaveTypeNameEn: r.leaveType.nameEn,
+      leaveTypeNameFr: r.leaveType.nameFr,
       leaveTypeColor: r.leaveType.color,
       startDate: r.startDate,
       endDate: r.endDate,
@@ -473,6 +477,8 @@ export async function workforceStats(user: SessionUser, filters: WorkforceFilter
       userName: r.user.name,
       departmentName: r.user.department?.name ?? null,
       leaveTypeName: r.leaveType.name,
+      leaveTypeNameEn: r.leaveType.nameEn,
+      leaveTypeNameFr: r.leaveType.nameFr,
       leaveTypeColor: r.leaveType.color,
       startDate: r.startDate,
       endDate: r.endDate,

@@ -1,7 +1,7 @@
 import bcrypt from "bcryptjs";
 import { prisma, type Role, type UserStatus } from "@timeoff/db";
 import type { SessionUser } from "@/lib/session";
-import { audit, LeaveError, listPendingForApproval, seedBalancesForNewUser, syncCurrentAccruals } from "@/lib/services/leave";
+import { audit, LeaveError, listPendingForApproval, seedBalancesForNewUser, seedBalancesForNewLeaveType, syncCurrentAccruals } from "@/lib/services/leave";
 import { enqueueOutbox } from "@/lib/emails";
 import { enqueueEmails } from "@/lib/queue";
 import { canGrantRole, canManageUsers, getVisibleUserIds, isSupervisorRole } from "@/lib/permissions";
@@ -76,7 +76,7 @@ export async function balanceIssueRows(
       periodEnd: { gte: today },
       ...(visible === "all" ? {} : { userId: { in: visible } }),
     },
-    include: { user: { select: { id: true, name: true } }, leaveType: { select: { name: true } } },
+    include: { user: { select: { id: true, name: true } }, leaveType: { select: { name: true, nameEn: true, nameFr: true } } },
     orderBy: { user: { name: "asc" } },
   });
   const rows: BalanceIssueRow[] = [];
@@ -133,7 +133,7 @@ export async function adminStats(user: SessionUser) {
     prisma.approvalDelegation.count({ where: { companyId, active: true } }),
     prisma.leaveBalance.findMany({
       where: { companyId, periodStart: { lte: today }, periodEnd: { gte: today } },
-      include: { user: { select: { id: true, name: true } }, leaveType: { select: { id: true, name: true } } },
+      include: { user: { select: { id: true, name: true } }, leaveType: { select: { id: true, name: true, nameEn: true, nameFr: true } } },
     }),
     prisma.leaveRequest.count({
       where: {
@@ -342,6 +342,8 @@ export async function createUserForAdmin(user: SessionUser, input: CreateUserInp
 }
 
 export interface UpdateUserInput {
+  name?: string;
+  email?: string;
   role?: Role;
   status?: UserStatus;
   departmentId?: string;
@@ -374,8 +376,23 @@ export async function updateUserForAdmin(user: SessionUser, userId: string, inpu
   if (input.role && input.role !== target.role && user.role !== "SUPER_ADMIN" && (targetPrivileged || nextPrivileged)) {
     throw new LeaveError("Only a SUPER_ADMIN can change privileged roles.");
   }
+  if (input.name !== undefined && !input.name.trim()) {
+    throw new LeaveError("User name is required.");
+  }
+  const nextEmail = input.email?.trim().toLowerCase();
+  if (nextEmail && nextEmail !== target.email.toLowerCase()) {
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(nextEmail)) {
+      throw new LeaveError("Invalid email address.");
+    }
+    const duplicate = await prisma.user.findFirst({
+      where: { companyId: user.companyId, email: nextEmail, id: { not: userId } },
+    });
+    if (duplicate) throw new LeaveError("A user with this email already exists in this company.");
+  }
 
   const before = {
+    name: target.name,
+    email: target.email,
     role: target.role,
     status: target.status,
     departmentId: target.departmentId,
@@ -384,6 +401,8 @@ export async function updateUserForAdmin(user: SessionUser, userId: string, inpu
   const updated = await prisma.user.update({
     where: { id: userId },
     data: {
+      name: input.name !== undefined ? input.name.trim() : target.name,
+      email: nextEmail || target.email,
       role: input.role ?? target.role,
       status: input.status ?? target.status,
       departmentId: input.departmentId ?? target.departmentId,
@@ -399,10 +418,12 @@ export async function updateUserForAdmin(user: SessionUser, userId: string, inpu
     action: "user.update",
     entityType: "User",
     entityId: userId,
-    entityName: target.name,
+    entityName: before.name,
     employeeId: userId,
     before,
     after: {
+      name: updated.name,
+      email: updated.email,
       role: updated.role,
       status: updated.status,
       departmentId: updated.departmentId,
@@ -650,6 +671,7 @@ export interface CreateLeaveTypeInput {
   name: string;
   color: string;
   unit?: string;
+  accrualMethod?: string;
   requiresApproval: boolean;
   requiresAttachment: boolean;
   isPaid: boolean;
@@ -669,6 +691,7 @@ export async function createLeaveTypeForAdmin(user: SessionUser, input: CreateLe
         name: input.name.trim(),
         color: input.color || "#2e9486",
         unit: (input.unit as "DAYS" | "HOURS") ?? "DAYS",
+        accrualMethod: (input.accrualMethod as "CUMULATIVE_MONTHLY" | "FIXED_ANNUAL") ?? "CUMULATIVE_MONTHLY",
         requiresApproval: input.requiresApproval,
         requiresAttachment: input.requiresAttachment,
         isPaid: input.isPaid,
@@ -698,7 +721,45 @@ export async function createLeaveTypeForAdmin(user: SessionUser, input: CreateLe
     entityName: created.name,
     after: { name: created.name, unit: created.unit },
   });
+  await seedBalancesForNewLeaveType(prisma, user.companyId!, created.id);
   return created;
+}
+
+export interface UpdateLeaveTypeInput {
+  nameEn?: string | null;
+  nameFr?: string | null;
+  accrualMethod?: string | null;
+}
+
+export async function updateLeaveTypeForAdmin(
+  user: SessionUser,
+  leaveTypeId: string,
+  input: UpdateLeaveTypeInput,
+) {
+  requireHr(user);
+  const target = await leaveTypeForAdmin(user, leaveTypeId);
+  const before = { nameEn: target.nameEn, nameFr: target.nameFr, accrualMethod: target.accrualMethod };
+  const updated = await prisma.leaveType.update({
+    where: { id: leaveTypeId },
+    data: {
+      nameEn: input.nameEn === undefined ? target.nameEn : input.nameEn?.trim() || null,
+      nameFr: input.nameFr === undefined ? target.nameFr : input.nameFr?.trim() || null,
+      accrualMethod: input.accrualMethod === undefined ? target.accrualMethod : (input.accrualMethod as "CUMULATIVE_MONTHLY" | "FIXED_ANNUAL") ?? target.accrualMethod,
+    },
+  });
+  await audit(prisma, {
+    companyId: user.companyId!,
+    actorId: user.id,
+    action: input.accrualMethod !== undefined && input.accrualMethod !== target.accrualMethod
+      ? "leaveType.updateAccrualMethod"
+      : "leaveType.update",
+    entityType: "LeaveType",
+    entityId: leaveTypeId,
+    entityName: target.name,
+    before,
+    after: { nameEn: updated.nameEn, nameFr: updated.nameFr, accrualMethod: updated.accrualMethod },
+  });
+  return updated;
 }
 
 export interface UpdatePolicyInput {
@@ -771,6 +832,9 @@ export async function updatePolicyForAdmin(user: SessionUser, policyId: string, 
       probationDays: updated.probationDays,
     },
   });
+  if (input.annualAllotment !== undefined && Number(input.annualAllotment) > 0 && before.annualAllotment <= 0) {
+    await seedBalancesForNewLeaveType(prisma, user.companyId!, policy.leaveTypeId);
+  }
   return updated;
 }
 
@@ -893,7 +957,7 @@ export async function listBalancesForAdmin(
     },
     include: {
       user: { select: { name: true, email: true } },
-      leaveType: { select: { name: true } },
+      leaveType: { select: { name: true, nameEn: true, nameFr: true } },
     },
     orderBy: [{ periodStart: "desc" }, { user: { name: "asc" } }],
   });
@@ -929,7 +993,7 @@ export async function adjustBalanceForAdmin(
       leaveTypeId: input.leaveTypeId,
       ...(input.periodStart ? { periodStart: input.periodStart } : {}),
     },
-    include: { user: { select: { name: true } }, leaveType: { select: { name: true } } },
+    include: { user: { select: { name: true } }, leaveType: { select: { name: true, nameEn: true, nameFr: true } } },
     orderBy: { periodStart: "desc" },
   });
   if (!balance) throw new LeaveError("No balance row found for this user and leave type.");
